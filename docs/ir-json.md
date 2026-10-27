@@ -62,6 +62,9 @@ declarations in the given order, and `inits` is emitted in the given order.
 - `unreachable` uses the runtime's error path; verify that LPython supports it.
 - The generated module is compiled by LPython ahead of time. It must not rely on CPython-only
   modules or dynamic features.
+- The runtime contract uses classes with fields, dicts, closures, and exceptions. Validate that the
+  pinned LPython version supports them; if it does not, the runtime ABI and possibly the target
+  decision must change.
 
 ## Declaration
 

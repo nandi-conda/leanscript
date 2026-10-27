@@ -1,5 +1,12 @@
 # Refactor plan: Lean frontend, LPython target
 
+> **Target status.** The latest router correction names LPython, the LPython compiler, as the
+> target. The runtime contract currently relies on classes with fields, exceptions, dicts,
+> closures, and writable `os`/file APIs, which LPython 0.22's typed subset reportedly does not
+> support. If that is confirmed, the target needs a different runtime and IR-lowering strategy, or
+> it must return to CPython 3 source. Do not silently substitute one for the other; record the
+> decision here.
+
 ## Decision
 
 Lean stays in the pipeline, and the transpile target changes from JavaScript to LPython.
@@ -107,6 +114,24 @@ compiles a typed subset of Python, so the emitter and the runtime must stay insi
 This is the main new risk: the emitter and the runtime must be validated against the pinned
 LPython compiler, not against CPython. A construct that works in CPython may be rejected by
 LPython, and a type that CPython accepts may need an explicit LPython type.
+
+### Known feasibility risk
+
+The runtime contract uses classes with fields, exceptions, dicts, closures, and writable `os` and
+file APIs. LPython 0.22's typed subset reportedly supports only default constructors in some
+cases, no dataclasses, and no writable `os` or file APIs. The runtime threads report that the
+current contract cannot compile under it.
+
+There are two explicit options:
+
+- **Keep LPython and restrict the runtime ABI.** The emitter, the runtime, and parts of the IR
+  lowering would need a different design that stays inside LPython's subset. Some fixtures may be
+  out of reach.
+- **Return the target to CPython 3 source.** This is the implementation the runtime threads are
+  building. It validates generated `.py` by running it under CPython.
+
+The target decision must be made explicitly. The rest of this plan follows the latest router
+correction, which names LPython; CPython is not a silent fallback.
 
 ## Lean-side interfaces
 
