@@ -4,7 +4,7 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64"]
 
 [tasks]
-test = "python tests/run.py && python tests/ir_json.py"
+test = { cmd = "python tests/run.py && python tests/ir_json.py", depends-on = ["build"] }
 build = "lake build"
 
 [dependencies]
