@@ -1,5 +1,9 @@
 """Compile and run one of the programs in `examples/`.
 
+The compiler emits ordinary CPython 3 source, so the result runs with `sys.executable`, never
+`lpython`. Each run recompiles the source into the target path and runs the result, so a stale
+file is never run.
+
 Usage: `pixi run example <name>`.
 """
 

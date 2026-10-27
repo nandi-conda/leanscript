@@ -15,7 +15,8 @@
   executable. The probe matrix compiles and runs the executable.
 
 The compiler is kept as a pinned probe dependency only. It is not a build or test dependency of
-leanscript.
+leanscript, and it does not run leanscript's generated programs: those are ordinary CPython 3
+source and run with `python`.
 
 ## Reproducing the matrix
 

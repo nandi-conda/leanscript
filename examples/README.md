@@ -2,7 +2,10 @@
 
 Seven self-contained Lean programs for the pipeline "Lean frontend → IR JSON → CPython backend →
 `leanscript_runtime`". They use only Lean's core library and CPython's standard library: no `Std`
-imports, no fixture sidecars, and no LPython subset rules or workarounds.
+imports and no fixture sidecars. The compiler emits ordinary CPython 3 source. Run the generated
+files with `python` (`pixi run python`), not with `lpython`, which is a separate compiler project
+and is used here only for the rejection evidence in
+[`docs/lpython-subset.md`](../docs/lpython-subset.md).
 
 ## Prerequisites
 
@@ -41,12 +44,16 @@ pixi run python .lake/build/examples/hello.py
   CPython source. A plain `python -m leanscript` works only when `lean` is on `PATH` (for example
   in the Nix dev shell) or `LEAN_SYSROOT` is set.
 - `-o` keeps the generated `.py` in `.lake/build/examples/`, which Git ignores. Without `-o`, the
-  backend writes `<input>.py` next to the input.
-- No `PYTHONPATH` is needed. A generated program searches upward from its own directory for
-  `leanscript_runtime` and falls back to the project root recorded at compile time, so plain
-  `python .lake/build/examples/hello.py` works from any working directory. Files generated before
-  that bootstrap existed still fail with `ModuleNotFoundError`; regenerate them, which
-  `pixi run example <name>` does on every run.
+  backend writes `<input>.py` next to the input; that file is not ignored and can go stale, so
+  prefer `-o` into `.lake/build/`.
+- You do not need to set `PYTHONPATH`. A generated program searches upward from its own directory
+  for `leanscript_runtime` and falls back to the project root recorded at compile time, so plain
+  `python .lake/build/examples/hello.py` works from any working directory. Run the file with
+  CPython, not `lpython`.
+- Regenerate rather than reuse stale output. Every `pixi run example <name>` compiles the current
+  source over `.lake/build/examples/<name>.py`. Files generated before the bootstrap existed still
+  fail with `ModuleNotFoundError`, and older output may not match the current emitter; delete
+  `.lake/build/examples/` if in doubt.
 
 All seven examples pass under pixi's Lean 4.33.0 and under the pinned 4.35.0. `refs` calls the
 `ST.Prim.Ref.set` extern; `leanscript_runtime/ref.py` registers both the `set` and `put` spellings,
