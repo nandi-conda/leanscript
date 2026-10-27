@@ -9,8 +9,8 @@ test = "python tests/run.py && python tests/ir_json.py"
 [dependencies]
 python = ">=3.11"
 
-# LPython is the test runner and the stated target. It publishes only a linux-64 build on
-# conda-forge; the harness reports a missing compiler on other platforms.
-# LEANSCRIPT_TEST_RUNNER=cpython selects the explicitly approved CPython fallback.
+# LPython 0.22.0 is retained only for the rejection evidence in tests/lpython/run_probes.py.
+# It publishes only a linux-64 build on conda-forge. It is not the target: the runtime and
+# generated programs run on CPython 3 (docs/refactor-plan.md).
 [target.linux-64.dependencies]
 lpython = "==0.22.0"

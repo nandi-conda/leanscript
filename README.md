@@ -1,23 +1,22 @@
 # leanscript
-Lean to LPython
+Lean to CPython 3
 
-leanscript compiles Lean 4 programs to LPython source. Lean stays in the frontend: it elaborates
-the input and collects the compiler IR, and a Python backend emits LPython source (`.py`) that
-imports `leanscript_runtime`. The target is LPython 0.22.0. The JavaScript emitter, runtime, and
-tests are being retired.
+leanscript compiles Lean 4 programs to CPython 3 source. Lean stays in the frontend: it elaborates
+the input and collects the compiler IR, and a Python backend emits CPython 3 source (`.py`) that
+imports `leanscript_runtime`. The target is CPython 3.11 or newer. The JavaScript emitter, runtime,
+and tests are being retired.
 
-LPython 0.22.0 cannot compile the current runtime contract, so the runtime and IR lowering need the
-redesign described in [the refactor plan](docs/refactor-plan.md). The blockers include no object
-model, no arbitrary-precision integers (Lean `Nat` is unbounded), and no writable IO or stdin.
-[The LPython subset notes](docs/lpython-subset.md) record the probe results and the area-by-area
-shape changes. CPython 3 source is an explicitly flagged fallback that requires user approval; it
-is not a silent substitution. See also [the IR JSON boundary](docs/ir-json.md).
+LPython 0.22.0 was evaluated as an alternative target and rejected: 21 of 32 compiler probes fail.
+The blockers include no object model, no arbitrary-precision integers (Lean `Nat` is unbounded),
+no closures or exceptions, and no writable IO or stdin. [The probe report](docs/lpython-subset.md)
+records the matrix and the exact diagnostics; [the refactor plan](docs/refactor-plan.md) records
+the decision and the component scope. See also [the IR JSON boundary](docs/ir-json.md).
 
 ## Tests
 
-`pixi run test` uses the LPython runner by default. Until the LPython backend exists, structurally
-impossible fixtures are skipped with `.unsupported-lpython` sidecars; other LPython compile
-failures stay red. `LEANSCRIPT_TEST_RUNNER=cpython` runs the explicitly flagged CPython fallback,
-which requires user approval. See `tests/README.md`.
+`pixi run test` runs the fixture suite. The target runner is CPython 3.11 or newer; `tests/run.py`
+still defaults to the rejected LPython runner until the harness change recorded in the refactor
+plan lands. `tests/lpython/` holds the compiler probe matrix; it is evidence, not part of
+`pixi run test`. See `tests/README.md`.
 
 [![](https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:mss5l446ynjlw6e67y6u5fsq/bafkreigi4fxmqpn2d7soi4d344tipzamivhwofnulhye4unjc3ljmlke5u)](https://bsky.app/profile/tonofcrates.bsky.social/post/3my3zodphxk2k)
