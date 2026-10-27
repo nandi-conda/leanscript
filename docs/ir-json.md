@@ -41,17 +41,17 @@ declarations in the given order, and `inits` is emitted in the given order.
 
 ## Target conventions
 
-- The emitted source is LPython source. It must stay within the Python subset supported by the
-  pinned LPython compiler.
+- The target is LPython 0.22.0. The emitted source is LPython 0.22 source and must stay within the
+  Python subset that compiler supports.
 - LPython is statically typed. The emitter derives parameter, return, and local annotations from
   the IR types; the runtime's public signatures need matching annotations.
 - Every `js` value is a valid identifier in LPython source. Lean names mangle to `l_...`.
 - Generated files start with `import leanscript_runtime as _rt`. The runtime package lives at the
   project root and must be importable by LPython; the test harness makes it visible to the
   compiler.
-- The emitter imports `leanscript_runtime.externs` directly for target checks. There is no
-  generated extern file. The module must be plain data that both the backend's Python and LPython
-  can import.
+- The current contract imports `leanscript_runtime.externs` as a dict of callables. LPython has no
+  common callable type and `dict[str, T]` is homogeneous, so the LPython path must resolve externs
+  at emission time and emit direct calls or a finite `if` chain. There is no generated extern file.
 - LPython has fixed-width numeric types. The runtime maps the IR's integer types to LPython types
   and preserves Lean's wrapping rules. Do not assume arbitrary-precision Python integers.
 - Lean strings are UTF-8 byte sequences. The LPython runtime must preserve that behavior,
@@ -59,14 +59,16 @@ declarations in the given order, and `inits` is emitted in the given order.
 - Reference-count operations become runtime calls. LPython manages memory, so `inc`, `dec`, and
   `del` may be no-ops. `reset`, `isShared`, and `reuse` must preserve exclusive-update semantics;
   a conservative `isShared` that always returns true is correct but allocates.
-- `unreachable` uses the runtime's error path; verify that LPython supports it.
+- `unreachable` cannot use exceptions; LPython 0.22 has no usable `try`/`except`. Use an
+  `assert`-based abort or an explicit return code.
 - The generated module is compiled by LPython ahead of time. It must not rely on CPython-only
   modules or dynamic features.
 - LPython 0.22.0 rejects classes with non-default constructors and methods, exceptions, closures,
   `bytearray`/`bytes`, and writable `os`/file APIs. The type model is the main blocker: Lean IR
-  values are dynamically typed and LPython has no `Any`, union, or object type. See
-  `docs/lpython-subset.md`. If LPython is a hard requirement, the runtime ABI must change; if not,
-  the target is CPython 3 source.
+  values are dynamically typed and LPython has no `Any`, union, or object type. The JSON schema can
+  stay unchanged, but the emitter and runtime shape must change as described in
+  `docs/lpython-subset.md`. CPython 3 source is an explicitly flagged fallback that requires user
+  approval.
 
 ## Declaration
 
