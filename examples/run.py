@@ -5,7 +5,6 @@ Usage: `pixi run example <name>`.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -47,11 +46,7 @@ def main(argv: list[str]) -> int:
     compiled = subprocess.run(compile_command, cwd=root)
     if compiled.returncode != 0:
         return compiled.returncode
-    # The generated source imports `leanscript_runtime` from the repository root.
-    env = dict(os.environ)
-    existing = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = str(root) if not existing else str(root) + os.pathsep + existing
-    return subprocess.run([sys.executable, str(target)], cwd=root, env=env).returncode
+    return subprocess.run([sys.executable, str(target)], cwd=root).returncode
 
 
 if __name__ == "__main__":

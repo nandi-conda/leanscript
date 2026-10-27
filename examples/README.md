@@ -24,17 +24,17 @@ pixi run example hello
 ```
 
 The task runs `pixi run build` first, compiles `examples/<name>.lean` to
-`.lake/build/examples/<name>.py`, and runs that file with `leanscript_runtime` importable, so a
-fresh checkout needs no separate build step. The name is the file stem without `.lean`; every
-example below works (`hello`, `numbers`, `arrays`, `strings`, `closures`, `inductives`, `refs`).
-An unknown or missing name prints the list of names and exits with status 2.
+`.lake/build/examples/<name>.py`, and runs that file, so a fresh checkout needs no separate build
+step. The name is the file stem without `.lean`; every example below works (`hello`, `numbers`,
+`arrays`, `strings`, `closures`, `inductives`, `refs`). An unknown or missing name prints the list
+of names and exits with status 2.
 
 The same steps by hand:
 
 ```sh
 pixi run build
 pixi run python -m leanscript compile examples/hello.lean -o .lake/build/examples/hello.py
-PYTHONPATH=. pixi run python .lake/build/examples/hello.py
+pixi run python .lake/build/examples/hello.py
 ```
 
 - `pixi run python -m leanscript compile` runs the Lean frontend, reads the IR JSON, and writes
@@ -42,7 +42,11 @@ PYTHONPATH=. pixi run python .lake/build/examples/hello.py
   in the Nix dev shell) or `LEAN_SYSROOT` is set.
 - `-o` keeps the generated `.py` in `.lake/build/examples/`, which Git ignores. Without `-o`, the
   backend writes `<input>.py` next to the input.
-- `PYTHONPATH=.` lets the generated program import `leanscript_runtime` from the repository root.
+- No `PYTHONPATH` is needed. A generated program searches upward from its own directory for
+  `leanscript_runtime` and falls back to the project root recorded at compile time, so plain
+  `python .lake/build/examples/hello.py` works from any working directory. Files generated before
+  that bootstrap existed still fail with `ModuleNotFoundError`; regenerate them, which
+  `pixi run example <name>` does on every run.
 
 All seven examples pass under pixi's Lean 4.33.0 and under the pinned 4.35.0. `refs` calls the
 `ST.Prim.Ref.set` extern; `leanscript_runtime/ref.py` registers both the `set` and `put` spellings,
