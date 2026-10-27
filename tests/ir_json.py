@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,10 +24,17 @@ default_input = root / "tests" / "fixtures" / "Hello.lean"
 
 
 def find_dumper() -> str:
+    """Finds the Lean frontend the same way `leanscript.cli` does."""
     configured = os.environ.get("LEANSCRIPT_IR")
     if configured:
         return configured
-    return str(root / ".lake" / "build" / "bin" / "leanscript-ir")
+    candidate = root / ".lake" / "build" / "bin" / "leanscript-ir"
+    if candidate.is_file():
+        return str(candidate)
+    found = shutil.which("leanscript-ir")
+    if found is not None:
+        return found
+    return str(candidate)
 
 
 def is_int(value: object) -> bool:

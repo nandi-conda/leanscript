@@ -9,7 +9,8 @@ test = "python tests/run.py && python tests/ir_json.py"
 [dependencies]
 python = ">=3.11"
 
-# LPython is the alternate test runner, selected with LEANSCRIPT_TEST_RUNNER=lpython. It publishes
-# only a linux-64 build on conda-forge; the harness reports a missing compiler on other platforms.
+# LPython is the test runner and the stated target. It publishes only a linux-64 build on
+# conda-forge; the harness reports a missing compiler on other platforms.
+# LEANSCRIPT_TEST_RUNNER=cpython selects the explicitly approved CPython fallback.
 [target.linux-64.dependencies]
 lpython = "==0.22.0"
