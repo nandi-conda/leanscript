@@ -148,6 +148,11 @@ There are two explicit options:
 The target decision must be made explicitly. The rest of this plan follows the latest router
 correction, which names LPython; CPython is not a silent fallback.
 
+**Recommendation.** Treat CPython 3 source as the implementation target unless the router
+explicitly requires LPython. LPython 0.22.0 is not a viable target for the current runtime
+contract; choosing it means funding the redesign above and accepting that some fixtures may be out
+of reach.
+
 ## Lean-side interfaces
 
 The Lean executable is `leanscript-ir`; the user-facing command is `leanscript`.
