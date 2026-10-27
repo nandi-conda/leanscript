@@ -1,4 +1,4 @@
-/-- Tail recursive, so it must not grow the JS stack. -/
+/-- Tail recursive, so it must not grow the target's stack. -/
 def countDown (n acc : Nat) : Nat :=
   match n with
   | 0 => acc

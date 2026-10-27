@@ -4,5 +4,12 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64"]
 
 [tasks]
+test = "python tests/run.py && python tests/ir_json.py"
 
 [dependencies]
+python = ">=3.11"
+
+# LPython is the alternate test runner, selected with LEANSCRIPT_TEST_RUNNER=lpython. It publishes
+# only a linux-64 build on conda-forge; the harness reports a missing compiler on other platforms.
+[target.linux-64.dependencies]
+lpython = "==0.22.0"

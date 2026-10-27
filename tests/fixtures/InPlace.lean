@@ -1,6 +1,6 @@
 /-!
-Loops that are only linear if exclusive values are updated in place. Without reference counting
-they are quadratic and far too slow for the test timeout.
+Loops that are only linear if exclusive values are updated in place. Without in-place updates they
+are quadratic and far too slow for the test timeout.
 -/
 
 def buildArray (n : Nat) : Array Nat := Id.run do

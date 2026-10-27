@@ -17,7 +17,7 @@
     "format:check": "prettier --check src/runtime scripts tests",
     "lint": "oxlint src/runtime scripts tests",
     "lint:fix": "oxlint --fix src/runtime scripts tests && prettier --write src/runtime scripts tests",
-    "test": "node scripts/gen-target-externs.js --check && node tests/run.js",
+    "test": "python tests/run.py",
     "gen-externs": "node scripts/gen-target-externs.js"
   },
   "devDependencies": {
