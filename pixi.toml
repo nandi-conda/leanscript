@@ -5,9 +5,15 @@ platforms = ["linux-64", "linux-aarch64"]
 
 [tasks]
 test = "python tests/run.py && python tests/ir_json.py"
+build = "lake build"
 
 [dependencies]
 python = ">=3.11"
+
+# Lake ships with Lean 4. conda-forge's newest lean4 is 4.33.0, while lean-toolchain pins
+# leanprover/lean4:v4.35.0 for the frontend. `pixi run lake` therefore uses 4.33.0; elan
+# remains the way to build with the pinned 4.35.0 toolchain.
+lean4 = "==4.33.0"
 
 # LPython 0.22.0 is retained only for the rejection evidence in tests/lpython/run_probes.py.
 # It publishes only a linux-64 build on conda-forge. It is not the target: the runtime and
