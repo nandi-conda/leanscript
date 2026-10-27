@@ -12,8 +12,9 @@ pixi run test
 
 `pixi run test` runs `pixi run build` first, then `tests/run.py` and `tests/ir_json.py`. The build
 produces `.lake/build/bin/leanscript-ir`, which the backend runs. The harness invokes the backend
-as `python -m leanscript compile` and runs each generated program with the current interpreter and
-the repository root on `PYTHONPATH`, so `leanscript_runtime` resolves to the in-tree package.
+as `python -m leanscript compile` and runs each generated program with the current interpreter in
+a working directory outside the repository root, so the program's bootstrap must make
+`leanscript_runtime` resolve to the in-tree package.
 
 The pinned `lpython` dependency in `pixi.toml` exists only for the rejection evidence in
 `tests/lpython/run_probes.py`; it is not part of `pixi run test`.
