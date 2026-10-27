@@ -52,23 +52,30 @@ declarations in the given order, and `inits` is emitted in the given order.
 - The current contract imports `leanscript_runtime.externs` as a dict of callables. LPython has no
   common callable type and `dict[str, T]` is homogeneous, so the LPython path must resolve externs
   at emission time and emit direct calls or a finite `if` chain. There is no generated extern file.
-- LPython has fixed-width numeric types. The runtime maps the IR's integer types to LPython types
-  and preserves Lean's wrapping rules. Do not assume arbitrary-precision Python integers.
-- Lean strings are UTF-8 byte sequences. The LPython runtime must preserve that behavior,
-  including byte length and indexing, under LPython's string representation.
+- LPython has only `i8` through `i64`; there is no arbitrary-precision integer. Lean `Nat` and
+  `Int` are unbounded, and fixtures print `30!`, `2^100`, `10^20`, and `fib(200)`, so the runtime
+  needs a bignum layer such as `list[i64]` limbs. Map fixed-width IR types to LPython types and
+  preserve Lean's wrapping rules. For `u64`, build large constants from shifts, use `//` for
+  integer division, and preserve modulo-`2^64` wraparound.
+- LPython `str` is a UTF-8 byte string. The runtime can keep strings as `str` with no codec:
+  `len` is the byte length, indexing returns a one-byte `str`, and `ord` returns a signed byte
+  value, so mask with `& 255`. There is no item assignment, and slicing inside functions is
+  unreliable or crashes; build substrings with byte loops.
 - Reference-count operations become runtime calls. LPython manages memory, so `inc`, `dec`, and
   `del` may be no-ops. `reset`, `isShared`, and `reuse` must preserve exclusive-update semantics;
   a conservative `isShared` that always returns true is correct but allocates.
-- `unreachable` cannot use exceptions; LPython 0.22 has no usable `try`/`except`. Use an
-  `assert`-based abort or an explicit return code.
+- `unreachable`, unavailable externs, and panics cannot use exceptions: `try`/`except` is an ICE
+  and uncaught `raise` prints `ERROR STOP` with no message. Use `assert cond, msg` (stderr, exit 1)
+  or an explicit return code.
 - The generated module is compiled by LPython ahead of time. It must not rely on CPython-only
   modules or dynamic features.
-- LPython 0.22.0 rejects classes with non-default constructors and methods, exceptions, closures,
-  `bytearray`/`bytes`, and writable `os`/file APIs. The type model is the main blocker: Lean IR
-  values are dynamically typed and LPython has no `Any`, union, or object type. The JSON schema can
-  stay unchanged, but the emitter and runtime shape must change as described in
-  `docs/lpython-subset.md`. CPython 3 source is an explicitly flagged fallback that requires user
-  approval.
+- LPython 0.22.0 has no object model: classes cannot be returned, stored in lists, or used as
+  fields. It rejects exceptions, closures, `bytearray`/`bytes`, writable `os`/file APIs, stdin,
+  f-strings, comprehensions, generators, `lambda`, `@property`, and `from __future__ import
+  annotations`. The type model is the main blocker: Lean IR values are dynamically typed and
+  LPython has no `Any`, union, or object type. The JSON schema can stay unchanged, but the emitter
+  and runtime shape must change as described in `docs/lpython-subset.md`. CPython 3 source is an
+  explicitly flagged fallback that requires user approval.
 
 ## Declaration
 

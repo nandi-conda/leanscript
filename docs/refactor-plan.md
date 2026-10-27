@@ -91,15 +91,19 @@ compiles a typed subset of Python, so the emitter and the runtime must stay insi
   `jmp` need a lowering that uses only supported control flow; `try`/`except` is an internal
   compiler error, so do not use it. A self tail call becomes a `while True` loop with typed
   parameter reassignment.
-- **Constructors.** A `Ctor` class with a non-default constructor and methods is not expressible
-  in LPython 0.22. Represent a value as a tagged cell with typed payload slots, and dispatch on the
+- **Constructors and objects.** LPython 0.22 has no object model: classes cannot be returned,
+  stored in lists, or used as fields. A `Ctor` class with a non-default constructor and methods is
+  not expressible. Represent a value as a tagged cell with typed payload slots, and dispatch on the
   tag with `if` chains. See the value-representation rows in `docs/lpython-subset.md`.
-- **Numbers.** LPython has fixed-width numeric types. Map the IR types to LPython types and preserve
-  Lean's wrapping rules. Do not assume CPython's arbitrary-precision integers; large `Nat` and
-  `Int` values need explicit runtime support or a documented limit.
-- **Strings.** Lean strings are UTF-8 byte sequences. LPython has no `bytes` or `bytearray`, so
-  the runtime must represent them as a typed buffer, such as `list[i32]`, with manual codecs and
-  byte-oriented operations.
+- **Numbers.** LPython has only `i8` through `i64`; there is no arbitrary-precision integer. Lean
+  `Nat` and `Int` are unbounded, and fixtures print `30!`, `2^100`, `10^20`, and `fib(200)`, so the
+  runtime needs a bignum layer such as `list[i64]` limbs. Map fixed-width IR types to LPython
+  types and preserve Lean's wrapping rules. For `u64`, build large constants from shifts, use `//`
+  for integer division, and preserve modulo-`2^64` wraparound.
+- **Strings.** LPython `str` is a UTF-8 byte string, so the runtime can keep strings as `str`
+  with no codec. `len` is the byte length, indexing returns a one-byte `str`, and `ord` returns a
+  signed byte value, so mask with `& 255`. There is no item assignment, and slicing inside
+  functions is unreliable or crashes; build substrings with byte loops.
 - **Ownership.** LPython manages memory. `inc`, `dec`, and `del` may become no-ops if the semantics
   hold. `reset`, `isShared`, and `reuse` must still preserve exclusive-update semantics; a
   conservative `isShared` that always returns true makes `reuse` allocate and is correct, but it
@@ -113,9 +117,10 @@ compiles a typed subset of Python, so the emitter and the runtime must stay insi
   resolve externs at emission time and emit direct calls or a finite `if` chain. There is no target
   selection. Without `--allow-unavailable`, a missing extern fails compilation; with it, the extern
   becomes a stub on the runtime's abort path.
-- **Errors.** LPython 0.22 has no usable `try`/`except`; it is an internal compiler error. Use
-  `assert`-based aborts or explicit return codes. `assert cond, msg` prints `AssertionError: msg`
-  to stderr and exits 1, so `unreachable`, unavailable externs, and panic paths need a redesign.
+- **Errors.** LPython 0.22 has no usable `try`/`except`; it is an internal compiler error, and
+  uncaught `raise` prints `ERROR STOP` with no message. Use `assert`-based aborts or explicit
+  return codes. `assert cond, msg` prints `AssertionError: msg` to stderr and exits 1, so
+  `unreachable`, unavailable externs, and panic paths need a redesign.
 - **Compilation model.** The generated `.py` is compiled by LPython ahead of time. It must not rely
   on CPython-only modules, dynamic imports, or runtime reflection.
 
@@ -129,48 +134,68 @@ LPython 0.22.0 cannot compile the current runtime contract. The full probe repor
 area-by-area shape-change table are in `docs/lpython-subset.md`. The plan must change at these
 places:
 
-- **Value representation.** Replace `Ctor` as a class with a non-default constructor and methods
-  with a tagged cell and typed payload slots; dispatch with `if` chains.
+- **Value representation and object model.** Classes are not heap objects: returning an instance,
+  `list[P]`, class-typed fields, and mutation through a parameter are rejected or crash the
+  compiler. Replace `Ctor` classes and methods with tagged lists or records, typed payload slots,
+  and free functions that dispatch with `if` chains.
 - **Heterogeneous fields.** `Ctor.f` mixes strings, ints, floats, closures, and other Ctors.
   LPython has no heterogeneous `list`, `Any`, union, or common object type. Split payloads by type
   or use a tagged union with typed slots.
 - **Scalar storage.** `Ctor.s` mixes integer and float fields. `dict[str, T]` has one value type;
   use typed scalar slots or per-shape records.
-- **Strings and byte arrays.** No `bytes`, `bytearray`, `str.encode`, or `bytes.decode`. Use a
-  typed UTF-8 buffer such as `list[i32]` with manual codecs.
-- **Closures and higher-order calls.** No `lambda`, no methods, no common callable type. Encode
-  closures as tagged records with a function id and captured arguments; dispatch `pap`/`apply`
-  with `if` chains or specialize.
-- **Exceptions and error paths.** `try`/`except` is an internal compiler error. Use `assert`-based
-  aborts or explicit return codes for `unreachable`, unavailable externs, and panics.
+- **Strings.** LPython `str` is a UTF-8 byte string, so strings can stay `str` with no codec.
+  `len` is the byte length, indexing returns a one-byte `str`, and `ord` returns a signed byte
+  value, so mask with `& 255`. There is no item assignment, and slicing inside functions is
+  unreliable or crashes. Build substrings with byte loops.
+- **Byte arrays.** `bytearray` and `bytes` are undeclared. Use a typed integer buffer with manual
+  byte operations.
+- **Closures and higher-order calls.** No object model, no `lambda`, no methods, no common callable
+  type. Encode closures as tagged lists or records with a function id and captured arguments;
+  dispatch `pap`/`apply` with `if` chains or specialize.
+- **Exceptions and error paths.** `try`/`except` is an internal compiler error, and uncaught
+  `raise` prints `ERROR STOP` with no message. Use `assert`-based aborts or explicit return codes
+  for `unreachable`, unavailable externs, and panics.
 - **Control flow.** No labeled `break` and no exceptions. Lower join points with flags, state
   machines, or typed loop variables; lower `case` with `if`/`elif`.
 - **Reference counting.** LPython owns memory. Make `inc`/`dec`/`del` no-ops, make `isShared`
   conservatively true, and let `reuse` allocate; remove `_children()` and finalizers.
-- **Runtime objects.** Classes allow annotated fields, a default constructor, and post-construction
-  assignment only. Replace methods on `Ctor`, `Closure`, `Ref`, `Thunk`, `Handle`, `LeanArray`,
-  and `LeanString` with free functions and typed structs.
-- **IO.** `sys.stderr.write` is rejected and writable `os`/file APIs are unavailable in the probe.
-  Redesign IO around LPython-supported calls or a host layer; CLI, file system, and process
-  fixtures are blocked until this is solved.
+- **Runtime objects.** Classes cannot be heap objects and have no methods. Replace `Ctor`,
+  `Closure`, `Ref`, `Thunk`, `Handle`, `LeanArray`, and `LeanString` with tagged lists or records
+  plus free functions.
+- **IO and stdin.** LPython's `os` module is read-only and it has no stdin; `sys.stderr.write` is
+  rejected. The `Cli` fixture needs stdin, file write and append, directory operations, current
+  directory changes, environment access, and sleep, so it is unimplementable on LPython 0.22
+  without a host layer. Other IO, file system, and process fixtures are blocked for the same
+  reason.
+- **Bignums.** LPython has only `i8` through `i64`; Lean `Nat` and `Int` are unbounded. Fixtures
+  print `30!`, `2^100`, `10^20`, and `fib(200)`, so a bignum layer, such as `list[i64]` limbs, is
+  required. `Loops`, `NumberCrunching`, `Caching`, `Builtins`, and `ExprParser` cannot pass until
+  it exists.
+- **`u64`.** Large decimal literals are rejected, `u64(...)` construction is unreliable, and `/`
+  returns `f64`. Build constants from shifts, use `//` for integer division, and preserve
+  modulo-`2^64` wraparound.
 - **Exit codes and diagnostics.** `sys.exit(n)` writes `STOP n` to stderr and exits `n`; earlier
-  stdout is preserved. `assert cond, msg` prints `AssertionError: msg` to stderr and exits 1. Map
-  errors accordingly and make the harness tolerate `STOP n`.
-- **Integers and annotations.** No bare `int`; use `i8`/`i16`/`i32`/`i64`/`u64`/`f64`. Annotate
-  every function, parameter, return, and local from the IR types. Large `Nat`/`Int` values need a
-  representation.
+  stdout is preserved. `assert cond, msg` prints `AssertionError: msg` to stderr and exits 1;
+  `raise` loses the message. Map errors accordingly and make the harness tolerate `STOP n`.
+- **Integers, annotations, and loop variables.** No bare `int`; use `i8`/`i16`/`i32`/`i64`/`u64`/
+  `f64`. Annotate every function, parameter, return, and local from the IR types. Declare every
+  loop variable, including `for i in range(n)` and `for k in d`, before the loop. Do not use
+  `from __future__ import annotations`.
 - **Heterogeneous lists and `typing`.** `list[T]` is homogeneous, `i32 | str` is rejected, and
   `typing` is missing. Split by type, use tagged cells, and avoid `Any`, unions, and `typing`.
-- **Syntax restrictions.** No f-strings, `@property`, or attribute access on a call result.
-  Declare loop variables with types before the loop.
-- **Extern table and entry point.** `dict[str, callable]` is not viable with heterogeneous
-  signatures. Resolve externs at emission time and emit direct calls or a finite `if` chain;
-  dispatch `main` and init functions directly.
+- **Syntax restrictions.** No f-strings, list comprehensions, generator expressions, `@property`,
+  `lambda`, or attribute access on a call result. Use concatenation and `str()`, explicit loops,
+  free functions, and typed temporaries.
+- **Extern table and entry point.** A plain module-level data dict works, but `dict[str, callable]`
+  is not viable with heterogeneous signatures. Resolve externs at emission time and emit direct
+  calls or a finite `if` chain; dispatch `main` and init functions directly.
 - **Imports and compilation.** Use `lpython -I <root>` instead of `PYTHONPATH`; compile ahead of
   time to a native executable, not `python file.py`.
-- **Test harness.** The runner must compile with LPython, run the executable, and capture
-  stdout/stderr/exit. Fixtures listed under "Test harness status" are gated on the runtime and
-  emitter work above.
+- **Test harness.** The LPython runner is the default, but it is expected to report unsupported
+  fixtures until the LPython backend exists. Structurally impossible fixtures use an adjacent
+  `<name>.unsupported-lpython` sidecar and count as skipped; other LPython compile failures stay
+  red because they are not-yet-implemented. Fixtures listed under "Test harness status" are gated
+  on the runtime and emitter work above.
 
 CPython 3 source is an explicitly flagged fallback. Switching to it requires user approval and a
 docs change; it is not a silent substitution. The CPython runtime modules are the semantic
@@ -251,8 +276,9 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
    operations, IO, file system, and process support. Keep every module inside the LPython subset.
    Wire the emitter's extern checks to `leanscript_runtime.externs`.
 6. **Finish the test harness for the LPython path.** `tests/run.py` and `tests/ir_json.py` have
-   landed. The LPython runner is the default; CPython is opt-in and requires approval. Close the
-   gaps listed under "Test harness status".
+   landed. The LPython runner is the default; CPython is opt-in and requires approval. Until the
+   LPython backend exists, the harness must report unsupported fixtures as unsupported or skipped,
+   not as failures. Close the gaps listed under "Test harness status".
 7. **Switch the build and CLI.** Update `pixi.toml`, `package.json`, `flake.nix`, and the README.
    Pin the LPython compiler. The CLI writes `<input>.py` next to the input by default and locates
    `leanscript-ir`.
@@ -275,10 +301,26 @@ the generated source with a runner switch:
 
 `tests/ir_json.py` checks `dump-json` directly: version 1, top-level shape, name-index ranges,
 `main` and `errorToString` inside `decls`, and the `-o` file contract. `.expected` and `.exitcode`
-remain native-Lean output and stay the semantic baseline.
+remain native-Lean output and stay the semantic baseline. `tests/README.md` documents the runner
+switch, the sidecars, and the CPython green path.
 
 Remaining gaps:
 
+- The default runner is LPython, but the LPython backend does not exist yet. The suite is expected
+  to report unsupported fixtures until it does. Structurally impossible fixtures use an adjacent
+  `<name>.unsupported-lpython` sidecar: the harness prints `skip <name> (unsupported under
+  lpython: <reason>)`, counts it as skipped, and ignores it under `--bless`. Other LPython compile
+  failures stay red because they are not-yet-implemented, not structurally impossible. This is a
+  migration state, not the target state; the target state is a green LPython suite. Switching the
+  default to CPython requires user approval.
+- `Cli` is unimplementable on LPython 0.22 without a host layer: there is no stdin, `os` is
+  read-only, and there are no writable file or directory operations. It has an
+  `unsupported-lpython` sidecar.
+- `Loops`, `NumberCrunching`, `Caching`, `Builtins`, and `ExprParser` need a bignum layer. LPython
+  has only `i8` through `i64`, while the fixtures print `30!`, `2^100`, `10^20`, and `fib(200)`.
+- `ExitCode`, `InitializeError`, `UncaughtError`, and `MutableState` still need exception
+  lowering.
+- `InPlace` and `Caching` need real in-place or `reuse` support, or they time out.
 - `Cli.browser-error` is deleted. There is no negative test for `--allow-unavailable` until the
   single-target missing-extern wording is pinned. A fixture using `@[extern "..."]` is the stable
   candidate.
@@ -286,13 +328,6 @@ Remaining gaps:
 - The `LeanScript: ` stderr prefix is pinned below as the runtime's internal error marker.
 - `pixi run test` currently stops at the preflight because `import leanscript` fails until the
   remaining runtime modules are committed. The preflight error names the missing backend.
-- These fixtures are gated on emitter and runtime work, not on test rewriting:
-  - `ExitCode`, `InitializeError`, `UncaughtError`, `MutableState`, `ExprParser`, and `Cli` need
-    exception lowering.
-  - `Cli` needs stdin, writable file system, current directory, environment, and sleep support.
-  - `InPlace` and `Caching` need real in-place or `reuse` support, or they time out.
-  - `ExprParser` has 1000-deep non-tail recursion and needs a recursion-limit or frame-count
-    decision.
 
 ## Contracts to preserve
 
@@ -308,7 +343,8 @@ Remaining gaps:
   present; expected output comes from native Lean; `--bless` regenerates it with native Lean.
   Generated source is compiled and run by LPython, and the test harness makes
   `leanscript_runtime` visible to LPython. The LPython runner is the target; the CPython runner is
-  opt-in and requires user approval.
+  opt-in and requires user approval. Unsupported fixtures are reported as unsupported or skipped,
+  not as failures.
 - **LPython subset.** Emitted source and the runtime use only constructs supported by the pinned
   LPython version.
 - **Diagnostics.** Compiler errors and warnings keep the `error:` and `warning:` prefixes.
@@ -337,16 +373,20 @@ the missing executable and the build command.
 The JSON boundary is versioned at 1. Any breaking change to the schema must bump the version, and
 the Python loader rejects versions it does not know.
 
-- Which Python subset does the pinned LPython version support: `match`, exceptions, classes,
-  dynamically sized arrays, string methods, and `sys` access?
+- What bignum representation should the runtime use for unbounded `Nat` and `Int`, and how does it
+  interact with `list[i64]` and fixed-width operations?
+- Is there any writable IO or stdin path in LPython 0.22, or is the `Cli` fixture impossible
+  without a host layer?
+- Are the class-instance segfaults permanent subset limits or compiler bugs that might be fixed?
+  If permanent, tagged lists or records are the only value model.
+- Is there a fixed LPython release or workaround for the string-slicing bug beyond loop-built
+  substrings?
+- Is `assert` the only usable error path? Uncaught `raise` loses the message.
 - How does LPython import `leanscript_runtime`? Does it compile the package from source, and what
   module search path does it use?
-- Can `leanscript_runtime.externs` stay a plain data module that both the backend's Python and
-  LPython can import? If not, the no-generated-extern-file rule needs revisiting.
-- How should the runtime map Lean `Nat`, `Int`, `uint64`, and `usize` to LPython's fixed-width
-  types? Is big-integer support needed?
-- How should the runtime represent strings: LPython `str` with byte-oriented helpers, or a byte
-  buffer? Lean string operations are UTF-8 based.
+- Can `leanscript_runtime.externs` stay plain module-level data, or does the runtime need a
+  heterogeneous mapping that LPython cannot express?
 - Does LPython expose enough of its memory model to implement `isShared`, or should the emitter
   treat objects as always shared? What happens to the reference-count debug mode?
-- Does LPython support the error path needed for `unreachable` and unavailable externs?
+- Which remaining subset features are unknown: `match`, dynamically sized arrays, additional
+  string methods, and `sys` access beyond `argv` and `exit`?
