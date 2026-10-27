@@ -295,22 +295,47 @@ def flush_output() -> None:
 
 
 def run_main(inits: list, main, arity: int, error_to_string) -> None:
-    """Runs the initializers, then `main`, and exits with the resulting status."""
-    status = 0
-    try:
-        if _run_inits(inits, error_to_string):
-            if arity == 2:
-                r = main(array_to_list([mk_string(a) for a in sys.argv[1:]]), 0)
-            else:
-                r = main(0)
-            if r.tag == 0:
-                value = r.f[0]
-                status = value if isinstance(value, int) else 0
-            else:
-                status = _report_error(r, error_to_string)
-    finally:
-        flush_output()
-    raise SystemExit(status)
+    """Runs the initializers, then `main`, and exits with the resulting status.
+
+    The program runs on a thread with a large stack, because generated code recurses as deeply as
+    the source program does.
+    """
+    result: dict[str, int] = {}
+
+    def run() -> None:
+        if not _run_inits(inits, error_to_string):
+            result["status"] = 1
+            return
+        if arity == 2:
+            r = main(array_to_list([mk_string(a) for a in sys.argv[1:]]), 0)
+        else:
+            r = main(0)
+        if r.tag == 0:
+            value = r.f[0]
+            result["status"] = value if isinstance(value, int) else 0
+        else:
+            result["status"] = _report_error(r, error_to_string)
+
+    if sys.getrecursionlimit() < 200_000:
+        sys.setrecursionlimit(200_000)
+    thread = _start_with_large_stack(run)
+    thread.join()
+    flush_output()
+    raise SystemExit(result.get("status", 1))
+
+
+def _start_with_large_stack(run) -> "threading.Thread":
+    import threading
+
+    for megabytes in (256, 64, 32, 16, 8):
+        try:
+            threading.stack_size(megabytes * 1024 * 1024)
+            break
+        except (ValueError, RuntimeError):
+            continue
+    thread = threading.Thread(target=run)
+    thread.start()
+    return thread
 
 
 def _run_inits(inits: list, error_to_string) -> bool:

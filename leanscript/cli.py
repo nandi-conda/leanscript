@@ -38,12 +38,17 @@ class CompileArgs:
     allow_unavailable: bool = False
 
 
+def project_root() -> Path:
+    """Returns the root of the leanscript project."""
+    return Path(__file__).resolve().parent.parent
+
+
 def leanscript_ir() -> str:
     """Returns the command that runs the Lean frontend."""
     override = os.environ.get("LEANSCRIPT_IR")
     if override:
         return override
-    candidate = Path(__file__).resolve().parent.parent / ".lake" / "build" / "bin" / "leanscript-ir"
+    candidate = project_root() / ".lake" / "build" / "bin" / "leanscript-ir"
     if candidate.is_file():
         return str(candidate)
     found = shutil.which("leanscript-ir")
@@ -74,7 +79,8 @@ def dump_program(input: Path) -> Program:
         temporary = Path(file.name)
     try:
         process = subprocess.run(
-            [leanscript_ir(), "dump-json", str(input), "-o", str(temporary)],
+            [leanscript_ir(), "dump-json", str(input.resolve()), "-o", str(temporary)],
+            cwd=project_root(),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -124,7 +130,9 @@ def compile_module(args: CompileArgs) -> int:
 
 
 def run_frontend(command: str, path: Path) -> int:
-    return subprocess.run([leanscript_ir(), command, str(path)]).returncode
+    return subprocess.run(
+        [leanscript_ir(), command, str(path.resolve())], cwd=project_root()
+    ).returncode
 
 
 def main(argv: list[str] | None = None) -> int:
