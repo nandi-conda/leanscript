@@ -401,7 +401,7 @@ class _Emitter:
             label = self.new_block()
             self.jp_labels[b.j] = label
             if b.xs:
-                self.line(", ".join(var_name(p.x) for p in b.xs) + " = None")
+                self.line(" = ".join(var_name(p.x) for p in b.xs) + " = None")
             self.emit_fn_body(b.b)
             self.start_block(label)
             self.emit_fn_body(b.v)
