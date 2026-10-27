@@ -118,7 +118,7 @@ exceptions, bytes, or IO. The project does not attempt it.
 - `try`/`except` is an internal compiler error: `visit_Try() not implemented` (`try_except`).
 - The only abort paths are `assert cond, msg`, which prints `AssertionError: msg` and exits 1
   (`assert_abort`), and `sys.exit(n)`, which prints `STOP n` to stderr and exits `n` (`exit_code`).
-- `ExitCode`, `UncaughtError`, `InitializeError`, `Jmp`, and `Tail` all depend on exceptions.
+- `ExitCode`, `UncaughtError`, and `InitializeError` all depend on exceptions.
 
 ### Closures and first-class functions
 

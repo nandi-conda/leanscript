@@ -79,7 +79,7 @@ subset and need no LPython-specific variant.
 | Classes: annotated fields, default constructor, free functions | Typed leaf structs | Accepted. | Useful for a leaf program, not for the runtime's objects. |
 | Classes: explicit `__init__`, methods | `Ctor`, `Closure`, `Ref`, `Thunk`, `LeanString`, `LeanArray` | Rejected. | No heap object with behavior. |
 | Closures, nested functions, function values | `Closure`, `pap`, `apply`, the extern table | Rejected. | No callable values or dynamic dispatch. |
-| `try`/`except` | `ExitCode`, `UncaughtError`, `InitializeError`, `Jmp`, `Tail` | Rejected; internal compiler error. | Only `assert` and `sys.exit` abort paths remain. |
+| `try`/`except` | `ExitCode`, `UncaughtError`, `InitializeError` | Rejected; internal compiler error. | Only `assert` and `sys.exit` abort paths remain. |
 | Comprehensions | Runtime helpers and emitter output | Rejected; internal compiler error. | Workaround is a loop; it adds no capability. |
 | `bytes`, `bytearray`, `encode`, `decode` | `LeanString`, `ByteArray` | Rejected. | No byte model and no text/byte conversion. |
 | `str` with ASCII operations | `LeanString` | Partial: ASCII works; `str` is UTF-8 bytes; `\u` escapes are not decoded. | No Unicode case mapping or character indexing, and no byte-offset API. |
@@ -91,7 +91,7 @@ subset and need no LPython-specific variant.
 ### What runs on CPython 3
 
 - Every `leanscript_runtime` module, including `Ctor`, `Closure`, `Ref`, `Thunk`, `LeanString`,
-  `LeanArray`, `ByteArray`, `Jmp`, `Tail`, and the extern table.
+  `LeanArray`, `ByteArray`, and the extern table.
 - Every generated program.
 - Every fixture, including `Cli`, `WordFrequency`, `ExitCode`, `UncaughtError`, and `ExprParser`.
 - The test harness, the CLI, the IR loader, and the emitter.
@@ -155,15 +155,15 @@ expects:
 - **Identifiers.** `names[].js` is the mangled identifier. Lean names mangle to `l_...`, which is
   valid in CPython source. The emitter's own temporaries use names such as `_rt`, `_Ctor`, `_ext`,
   `_inits`, `x_0`, and `block_0`.
-- **Control flow.** Blocks become indentation. `case` lowers to `if`/`elif`. Join points and `jmp`
-  use the runtime's `Jmp` exception or explicit control flow, whichever the emitter already uses.
-  A self tail call becomes a `while True` loop with parameter reassignment.
+- **Control flow.** Blocks become indentation. `case` lowers to `if`/`elif`. A body with join
+  points becomes numbered blocks selected by a `_pc` dispatch loop. A self tail call becomes a
+  `while True` loop with parameter reassignment.
 - **Constructors.** `Ctor` is a class with an `rc` field, a `tag`, an object-field vector `f`, and
   a scalar dictionary `s`. `inc`, `dec`, `reset`, `reuse`, and `isShared` operate on it.
 - **Numbers.** Python integers are arbitrary precision, which matches Lean's `Nat` and `Int`.
   Fixed-width operations keep Lean's wrapping rules in `leanscript_runtime.fixed`.
-- **Strings.** `LeanString` keeps Python text plus cached UTF-8 bytes. Python `str` handles Unicode;
-  byte offsets and byte operations use the cached bytes.
+- **Strings.** `LeanString` stores the UTF-8 bytes in a growable `bytearray`; the Python text and
+  the scalar count are cached. Byte offsets index the exact bytes, including invalid UTF-8.
 - **Ownership.** The `rc` field is real. `inc`, `dec`, `del`, `reset`, `isShared`, and `reuse`
   implement the reference-counting contract. Python reclaims memory; the counts decide exclusivity.
 - **Startup.** Nullary declarations use the runtime's lazy cell or init cell. The `inits` list runs
@@ -172,7 +172,7 @@ expects:
   checks availability at emission time. Without `--allow-unavailable`, a missing extern fails
   compilation; with it, the extern becomes a stub on the runtime's abort path.
 - **Errors.** `unreachable`, unavailable externs, and panic paths raise runtime errors with the
-  `LeanScript: ` prefix. `Jmp` and `Tail` are exceptions. `ExitCode` uses `sys.exit`.
+  `LeanScript: ` prefix. `ExitCode` uses `sys.exit`.
 - **IO.** The runtime uses `sys.stdout`, `sys.stderr`, `sys.stdin`, `open`, `os`, and the platform
   host modules. The CLI, file-system fixtures, and process fixtures use the same contract.
 - **Compilation model.** Generated `.py` is run by CPython. The harness puts the repository root on
@@ -205,8 +205,9 @@ The `dump-json` command is the production boundary. Its contract is in `docs/ir-
   trailing newline.
 - Failures print `error: <message>` on standard error and exit with status 1.
 - The module is elaborated with the interpreter enabled, so user code may run at compile time.
-- The `leanscript` CLI must invoke it without changing its working directory, because the frontend
-  resolves the source path and, potentially, compile-time file access relative to it.
+- The `leanscript` CLI runs `leanscript-ir` from the project root and passes an absolute input
+  path, so elan finds the pinned Lean toolchain. Compile-time file access resolves relative to the
+  project root.
 - The JSON schema is unchanged from version 1. `names[].js` carries the mangled identifier, and
   that value is valid in CPython source.
 
@@ -247,16 +248,16 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
 3. **Land the CPython runtime.** Complete `leanscript_runtime`: `core`, `nat`, `fixed`, `float`,
    `string`, `array`, `bytearray`, `misc`, `hash`, `io`, `stream`, `platform`, and `ref`. The
    runtime contract is the current JavaScript-equivalent one; no LPython subset rules apply.
-   (In progress.)
+   (Done.)
 4. **Finish the CPython emitter.** Emit CPython 3 source for every expression and body form, and
    check extern availability at emission time. The retired JavaScript emitter was the semantic
-   reference; the fixtures are the source of truth. (Landed; validate against the fixture suite.)
+   reference; the fixtures are the source of truth. (Done.)
 5. **Switch the test harness to CPython.** CPython is the only runner. The LPython branch,
    `LEANSCRIPT_TEST_RUNNER`, and `.unsupported-lpython` handling are removed, and the `Cli` sidecar
    is deleted. `tests/lpython/` and the pinned LPython dependency remain only for probe evidence.
    (Done.)
 6. **Switch the build and CLI.** Update `pixi.toml`, `flake.nix`, and the README. The CLI writes
-   `<input>.py` next to the input by default and locates `leanscript-ir`.
+   `<input>.py` next to the input by default and locates `leanscript-ir`. (Done.)
 7. **Retire the JavaScript path.** The Lean JS emitter, the JavaScript runtime, `package.json`,
    `pnpm-lock.yaml`, the JavaScript configs, and the JavaScript scripts are removed. (Done.)
 8. **Keep the rejection reproducible.** Keep `tests/lpython/probes/` and
@@ -275,13 +276,12 @@ for `run_probes.py` evidence and are not part of `pixi run test`.
 `main` and `errorToString` inside `decls`, and the `-o` file contract. `.expected` and `.exitcode`
 remain native-Lean output and stay the semantic baseline.
 
-Verified state after building `leanscript-ir` from Lean 4.35.0:
+Verified after building `leanscript-ir` from Lean 4.35.0:
 
-- On `t_aa2c62a8`'s runtime branch `5d9c15c`: the fixture suite is 22/22 on CPython,
-  `tests/ir_json.py` passes against the real dumper, `Cli` passes, and `InPlace` passes within the
-  300s timeout.
-- On current main: 21/22. The only failure is `Cli` (exit 1 vs 3) because the worker-thread
-  `SystemExit` fix in `run_main` is not merged. Once `5d9c15c` lands, the 22/22 state is exact.
+- The fixture suite is 22/22 on CPython.
+- `tests/ir_json.py` passes against the real dumper.
+- `Cli` passes; `run_main` catches the worker thread's `SystemExit` and exits with its status.
+- `InPlace` passes within the 300s timeout.
 
 Remaining gaps:
 

@@ -52,12 +52,13 @@ declarations in the given order, and `inits` is emitted in the given order.
   availability at emission time. There is no generated extern file.
 - Python integers are arbitrary precision, which matches Lean's `Nat` and `Int`. Fixed-width
   operations keep Lean's wrapping rules in `leanscript_runtime.fixed`.
-- Lean strings are UTF-8 byte sequences. `LeanString` keeps Python text plus cached UTF-8 bytes, so
-  byte length, byte indexing, and hashes preserve Lean's behavior.
+- Lean strings are UTF-8 byte sequences. `LeanString` stores the bytes in a growable `bytearray`;
+  the Python text and the scalar count are cached, so byte length, byte indexing, and hashes
+  preserve Lean's behavior.
 - Reference-count operations are real runtime calls. `inc`, `dec`, `del`, `reset`, `isShared`, and
   `reuse` use the `rc` field; `isShared` decides exclusivity and `reuse` decides in-place update.
 - `unreachable`, unavailable externs, and panic paths raise runtime errors with the `LeanScript: `
-  prefix. `Jmp` and `Tail` are exceptions.
+  prefix.
 - The generated module is run by CPython, not compiled ahead of time. It may use the standard
   library modules that the runtime already uses.
 - LPython 0.22.0 was evaluated and rejected; the matrix and the reasons are in

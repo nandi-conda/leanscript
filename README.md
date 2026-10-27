@@ -19,9 +19,7 @@ elan; the pixi environment alone cannot elaborate Lean source. Use the Nix dev s
 install (`flake.nix` provides elan and Python 3, with no Node or pnpm).
 
 `tests/run.py` runs generated source with CPython 3.11 or newer. There is no runner switch.
-On `t_aa2c62a8`'s runtime branch `5d9c15c`, the fixture suite is 22/22 with `tests/ir_json.py`
-passing. Current main is 21/22 until that branch lands; the only failure is `Cli` (exit 1 vs 3)
-from the worker-thread `SystemExit` handling. `tests/lpython/` and the pinned LPython dependency
-are evidence for the rejected path, not part of `pixi run test`. See `tests/README.md`.
+The fixture suite is 22/22 and `tests/ir_json.py` passes. `tests/lpython/` and the pinned LPython
+dependency are evidence for the rejected path, not part of `pixi run test`. See `tests/README.md`.
 
 [![](https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:mss5l446ynjlw6e67y6u5fsq/bafkreigi4fxmqpn2d7soi4d344tipzamivhwofnulhye4unjc3ljmlke5u)](https://bsky.app/profile/tonofcrates.bsky.social/post/3my3zodphxk2k)
