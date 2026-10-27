@@ -14,6 +14,9 @@ pixi run test
 `python -m leanscript compile` and runs each generated program with the current interpreter and the
 repository root on `PYTHONPATH`, so `leanscript_runtime` resolves to the in-tree package.
 
+The pinned `lpython` dependency in `pixi.toml` exists only for the rejection evidence in
+`tests/lpython/run_probes.py`; it is not part of `pixi run test`.
+
 ## Fixture files
 
 Each fixture is a `.lean` file plus optional sidecars:
