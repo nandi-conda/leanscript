@@ -30,6 +30,14 @@ def _ref_take(_sigma, _alpha, r, _w):
     return v
 
 
+def _ref_set(_sigma, _alpha, r, a, _w):
+    # `set` discards the old value, where `put` returns it.
+    old = r.value
+    r.value = a
+    dec(old)
+    return 0
+
+
 def _ref_swap(_sigma, _alpha, r, a, _w):
     old = r.value
     r.value = a
@@ -50,6 +58,7 @@ externs = {
     "ST.Prim.Ref.get": _ref_get,
     "ST.Prim.Ref.put": _ref_put,
     "ST.Prim.Ref.take": _ref_take,
+    "ST.Prim.Ref.set": _ref_set,
     "ST.Prim.Ref.swap": _ref_swap,
     "ST.Prim.Ref.ptrEq": _ref_ptr_eq,
     "Void.mk": _void_mk,
