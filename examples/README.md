@@ -62,6 +62,21 @@ so the example runs on either toolchain.
 Each program prints to standard output and exits with status 0. Their output matches native Lean
 4.35.0 (`lean -c` followed by `leanc`).
 
+## Compile only
+
+`pixi run transpile <name>` compiles one example without running it:
+
+```sh
+pixi run transpile hello
+python .lake/build/examples/hello.py
+```
+
+The task runs `pixi run build` first, then the same compile step as `pixi run example`, and prints
+the path it wrote (`.lake/build/examples/<name>.py`). Name handling matches `example`: an unknown
+or missing name prints the list of names and exits with status 2. As above, the generated program
+needs no `PYTHONPATH`. Use `transpile` when you want the emitted Python, or when you want to run it
+separately; `pixi run example <name>` recompiles and runs in one step.
+
 ## What each example shows
 
 | Example | Lean constructs | Output |

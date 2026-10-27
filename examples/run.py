@@ -4,7 +4,7 @@ The compiler emits ordinary CPython 3 source, so the result runs with `sys.execu
 `lpython`. Each run recompiles the source into the target path and runs the result, so a stale
 file is never run.
 
-Usage: `pixi run example <name>`.
+Usage: `pixi run example <name>` to compile and run, `pixi run transpile <name>` to compile only.
 """
 
 from __future__ import annotations
@@ -24,10 +24,18 @@ def available() -> list[str]:
 
 
 def usage() -> str:
-    return f"usage: pixi run example <name>\n\nexamples: {', '.join(available())}"
+    return (
+        "usage: pixi run example <name>\n"
+        "       pixi run transpile <name>\n"
+        f"\nexamples: {', '.join(available())}"
+    )
 
 
 def main(argv: list[str]) -> int:
+    run = True
+    if argv and argv[0] == "--no-run":
+        run = False
+        argv = argv[1:]
     if len(argv) != 1:
         print(usage(), file=sys.stderr)
         return 2
@@ -50,6 +58,9 @@ def main(argv: list[str]) -> int:
     compiled = subprocess.run(compile_command, cwd=root)
     if compiled.returncode != 0:
         return compiled.returncode
+    if not run:
+        print(f"wrote {target.relative_to(root)}")
+        return 0
     return subprocess.run([sys.executable, str(target)], cwd=root).returncode
 
 
