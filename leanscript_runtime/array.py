@@ -14,11 +14,14 @@ OUT_OF_BOUNDS = "Error: index out of bounds"
 class LeanArray(list):
     """A Lean `Array`: a list of owned references with a reference count."""
 
-    __slots__ = ("rc",)
+    __slots__ = ("rc", "_refs")
 
     def __init__(self, items=()) -> None:
         super().__init__(items)
         self.rc = 1
+        # Whether any element is reference counted. Copying an array of scalars needs no per-element
+        # work, which matters because a shared array is copied on every update.
+        self._refs = any(type(x) is not int for x in self)
         track(self)
 
     def _children(self):
@@ -34,13 +37,24 @@ def mk_array(items) -> LeanArray:
     return LeanArray(items)
 
 
+def _copy(a: LeanArray) -> LeanArray:
+    """Returns an exclusive copy of `a`, sharing its elements."""
+    r = LeanArray.__new__(LeanArray)
+    list.__init__(r, a)
+    r.rc = 1
+    r._refs = a._refs
+    track(r)
+    if r._refs:
+        for x in r:
+            inc(x)
+    return r
+
+
 def _ensure_exclusive(a: LeanArray) -> LeanArray:
     """Takes ownership of `a` and returns an exclusive array with the same elements."""
     if a.rc == 1:
         return a
-    r = mk_array(a)
-    for x in r:
-        inc(x)
+    r = _copy(a)
     dec(a)
     return r
 
@@ -56,6 +70,8 @@ def _set(a: LeanArray, i: int, v) -> LeanArray:
     r = _ensure_exclusive(a)
     dec(r[i])
     r[i] = v
+    if type(v) is not int:
+        r._refs = True
     return r
 
 
@@ -110,6 +126,8 @@ def _swap_if_in_bounds(_α, a: LeanArray, i: int, j: int) -> LeanArray:
 def _push(_α, a: LeanArray, v) -> LeanArray:
     r = _ensure_exclusive(a)
     r.append(v)
+    if type(v) is not int:
+        r._refs = True
     return r
 
 
