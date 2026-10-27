@@ -251,10 +251,10 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
 4. **Finish the CPython emitter.** Emit CPython 3 source for every expression and body form, and
    check extern availability at emission time. The retired JavaScript emitter was the semantic
    reference; the fixtures are the source of truth. (Landed; validate against the fixture suite.)
-5. **Switch the test harness to CPython.** `tests/run.py` now defaults to
-   `LEANSCRIPT_TEST_RUNNER=cpython`. The LPython runner, `.unsupported-lpython` sidecars, and
-   `tests/lpython/` remain as evidence only; the default target run never reads them. `Cli` runs on
-   CPython and needs no sidecar. (Done.)
+5. **Switch the test harness to CPython.** CPython is the only runner. The LPython branch,
+   `LEANSCRIPT_TEST_RUNNER`, and `.unsupported-lpython` handling are removed, and the `Cli` sidecar
+   is deleted. `tests/lpython/` and the pinned LPython dependency remain only for probe evidence.
+   (Done.)
 6. **Switch the build and CLI.** Update `pixi.toml`, `flake.nix`, and the README. The CLI writes
    `<input>.py` next to the input by default and locates `leanscript-ir`.
 7. **Retire the JavaScript path.** The Lean JS emitter, the JavaScript runtime, `package.json`,
@@ -266,17 +266,23 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
 ## Test harness status
 
 `tests/run.py` compiles every fixture with `python -m leanscript compile` and runs the generated
-source with a runner selected by `LEANSCRIPT_TEST_RUNNER`:
-
-- `cpython` is the default and the target path. It runs the source with the current interpreter,
-  with the repository root on `PYTHONPATH`.
-- `lpython` is an evidence-only switch. Its banner says `runner: lpython (evidence for the rejected
-  target)`, and `.unsupported-lpython` sidecars are consulted only in that mode. The target run
-  never reads them. `Cli` runs on CPython and needs no sidecar.
+source with CPython, with the repository root on `PYTHONPATH`. CPython is the only runner. The
+LPython branch, the `LEANSCRIPT_TEST_RUNNER` switch, and the `.unsupported-lpython` handling are
+gone; the `Cli` sidecar is deleted. `tests/lpython/` and the pinned LPython dependency remain only
+for `run_probes.py` evidence and are not part of `pixi run test`.
 
 `tests/ir_json.py` checks `dump-json` directly: version 1, top-level shape, name-index ranges,
 `main` and `errorToString` inside `decls`, and the `-o` file contract. `.expected` and `.exitcode`
 remain native-Lean output and stay the semantic baseline.
+
+Real-tree verification after building `leanscript-ir` from Lean 4.35.0:
+
+- `tests/ir_json.py` passes against the real dumper.
+- The fixture suite is 21/22 with CPython. The only failure is `Cli` (exit 1, expected 3), because
+  `SystemExit` from `IO.Process.exit` is dropped in `run_main`'s worker thread. Stdout matches and
+  stderr is empty, so this is a runtime exit-status bug, not a harness or fixture issue. The fix is
+  in flight.
+- `InPlace` passes within the 300s timeout.
 
 Remaining gaps:
 

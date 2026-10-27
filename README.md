@@ -18,8 +18,8 @@ the decision and the component scope. See also [the IR JSON boundary](docs/ir-js
 elan; the pixi environment alone cannot elaborate Lean source. Use the Nix dev shell or an elan
 install (`flake.nix` provides elan and Python 3, with no Node or pnpm).
 
-The target runner is CPython 3.11 or newer; `tests/run.py` defaults to
-`LEANSCRIPT_TEST_RUNNER=cpython`. The `lpython` runner and `tests/lpython/` are evidence for the
-rejected path, not part of the target run. See `tests/README.md`.
+`tests/run.py` runs generated source with CPython 3.11 or newer. There is no runner switch.
+`tests/lpython/` and the pinned LPython dependency are evidence for the rejected path, not part of
+`pixi run test`. See `tests/README.md`.
 
 [![](https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:mss5l446ynjlw6e67y6u5fsq/bafkreigi4fxmqpn2d7soi4d344tipzamivhwofnulhye4unjc3ljmlke5u)](https://bsky.app/profile/tonofcrates.bsky.social/post/3my3zodphxk2k)
