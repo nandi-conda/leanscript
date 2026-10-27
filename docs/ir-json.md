@@ -62,9 +62,11 @@ declarations in the given order, and `inits` is emitted in the given order.
 - `unreachable` uses the runtime's error path; verify that LPython supports it.
 - The generated module is compiled by LPython ahead of time. It must not rely on CPython-only
   modules or dynamic features.
-- The runtime contract uses classes with fields, dicts, closures, and exceptions. Validate that the
-  pinned LPython version supports them; if it does not, the runtime ABI and possibly the target
-  decision must change.
+- LPython 0.22.0 rejects classes with non-default constructors and methods, exceptions, closures,
+  `bytearray`/`bytes`, and writable `os`/file APIs. The type model is the main blocker: Lean IR
+  values are dynamically typed and LPython has no `Any`, union, or object type. See
+  `docs/lpython-subset.md`. If LPython is a hard requirement, the runtime ABI must change; if not,
+  the target is CPython 3 source.
 
 ## Declaration
 

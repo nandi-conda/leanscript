@@ -1,15 +1,19 @@
 # Refactor plan: Lean frontend, LPython target
 
-> **Target status.** The latest router correction names LPython, the LPython compiler, as the
-> target. The runtime contract currently relies on classes with fields, exceptions, dicts,
-> closures, and writable `os`/file APIs, which LPython 0.22's typed subset reportedly does not
-> support. If that is confirmed, the target needs a different runtime and IR-lowering strategy, or
-> it must return to CPython 3 source. Do not silently substitute one for the other; record the
-> decision here.
+> **Target status: blocked.** The latest router correction names LPython, the LPython compiler, as
+> the target. Probes against LPython 0.22.0 confirm that it cannot compile the current runtime
+> contract: classes with non-default constructors and methods, exceptions, `bytearray`/`bytes`,
+> closures, and writable `os`/file APIs are rejected. The main blocker is the type model: Lean IR
+> values are dynamically typed, while LPython has no `Any`, union, or object type. See
+> `docs/lpython-subset.md`. If LPython is a hard requirement, the runtime and emitter need the
+> redesign described below. If it is not, the target returns to CPython 3 source. Do not silently
+> substitute one for the other; record the decision here.
 
 ## Decision
 
-Lean stays in the pipeline, and the transpile target changes from JavaScript to LPython.
+Lean stays in the pipeline. The latest router correction names LPython as the target, but that
+target is blocked by the feasibility finding above. The bullets below describe the LPython path;
+the CPython 3 source fallback is described under "Known feasibility risk".
 
 - **Lean remains the frontend.** Lean elaborates the source, runs compile-time code, and collects
   the compiler IR from a `Lean.Environment`. The elaborator, IR collection, alias resolution, init
@@ -117,18 +121,29 @@ LPython, and a type that CPython accepts may need an explicit LPython type.
 
 ### Known feasibility risk
 
-The runtime contract uses classes with fields, exceptions, dicts, closures, and writable `os` and
-file APIs. LPython 0.22's typed subset reportedly supports only default constructors in some
-cases, no dataclasses, and no writable `os` or file APIs. The runtime threads report that the
-current contract cannot compile under it.
+Probes against LPython 0.22.0 confirm that the current runtime contract cannot compile. The
+compiler rejects classes with non-default constructors and methods, inheritance, `__slots__`,
+`bytearray`, `bytes`, `try`/`except`, `lambda`, `@property`, f-strings, and `sys.stderr.write`. It
+does not support bare `int`; every binding needs an explicit `i32`, `i64`, `f64`, `str`, `list[T]`,
+or `dict[K, V]` annotation. `sys.exit` prints `STOP <n>` on stdout before exiting, which breaks
+fixture output comparison. The full probe report is in `docs/lpython-subset.md`.
+
+The type model is the main blocker, bigger than `match` or exceptions. Lean IR values are
+dynamically typed: a constructor's fields can mix strings, integers, floats, closures, and other
+constructors. LPython has no `Any`, union, or object type, and no method dispatch on a tag. A
+faithful port of the JavaScript runtime is impossible.
 
 There are two explicit options:
 
-- **Keep LPython and restrict the runtime ABI.** The emitter, the runtime, and parts of the IR
-  lowering would need a different design that stays inside LPython's subset. Some fixtures may be
-  out of reach.
+- **Keep LPython and redesign the runtime ABI.** The emitter and runtime need a statically typed,
+  tag-dispatched encoding: constructors as tagged lists or records, strings as typed UTF-8
+  buffers with manual codecs, `if` chains instead of methods, no exceptions, an `assert` or
+  return-code error path, a stdout-safe exit, and LPython `-I` imports. This is a redesign phase,
+  not a port detail. Keep the CPython runtime port only as the semantic reference. Some fixtures
+  may be out of reach.
 - **Return the target to CPython 3 source.** This is the implementation the runtime threads are
-  building. It validates generated `.py` by running it under CPython.
+  building. It validates generated `.py` by running it under CPython, and the current runtime
+  modules already match the JavaScript reference on sampled string and container operations.
 
 The target decision must be made explicitly. The rest of this plan follows the latest router
 correction, which names LPython; CPython is not a silent fallback.
@@ -189,14 +204,18 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
 
 ## Migration phases
 
+0. **Resolve the target decision.** Confirm whether LPython is a hard requirement. If it is,
+   schedule the redesign in "Known feasibility risk" before building the runtime. If it is not,
+   retarget the plan to CPython 3 source. Do not start phase 3 until this is settled.
 1. **Freeze the semantic baseline.** Keep the 22 fixtures' `.expected`, `.exitcode`, `.args`, and
    `.stdin` files, which come from native Lean. Confirm that the current JavaScript path passes.
    (Done.)
 2. **Finish the IR boundary.** Keep `dump-json` with `-o` and schema version 1; keep
-   `names[].js` as the mangled identifier; build with Lake.
-3. **Pin LPython and build the runtime skeleton.** Add the LPython compiler to the environment and
-   record its supported subset. Add `Ctor`, extern resolution, lazy and init cells, `run_main`,
-   and an error path. Compile and run a hand-written Hello module with LPython.
+   `names[].js` as the mangled identifier; build with Lake. This phase is target-independent.
+3. **Pin LPython and build the runtime skeleton (LPython path only).** Add the LPython compiler
+   to the environment and record its supported subset. If the redesign option is chosen, replace
+   `Ctor`, extern resolution, lazy and init cells, `run_main`, and the error path with the tagged,
+   typed design. Compile and run a hand-written Hello module with LPython.
 4. **Write the LPython emitter.** Emit LPython source for the fixtures, starting with Hello and
    expanding until every expression and body form is covered. The JavaScript emitter is the
    semantic reference, not a source template.
@@ -211,6 +230,9 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
    `leanscript-ir`.
 8. **Retire the JavaScript path.** Remove the Lean JS emitter, the JavaScript runtime, and the
    JavaScript scripts after the LPython suite passes.
+
+Phases 3-5 are the LPython path. If the target returns to CPython 3 source, the runtime work already
+in progress replaces them, and phase 6 runs the generated `.py` under CPython.
 
 ## Contracts to preserve
 
