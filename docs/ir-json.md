@@ -43,6 +43,8 @@ declarations in the given order, and `inits` is emitted in the given order.
 
 - The emitted source is LPython source. It must stay within the Python subset supported by the
   pinned LPython compiler.
+- LPython is statically typed. The emitter derives parameter, return, and local annotations from
+  the IR types; the runtime's public signatures need matching annotations.
 - Every `js` value is a valid identifier in LPython source. Lean names mangle to `l_...`.
 - Generated files start with `import leanscript_runtime as _rt`. The runtime package lives at the
   project root and must be importable by LPython; the test harness makes it visible to the

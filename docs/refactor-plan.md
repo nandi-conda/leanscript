@@ -74,6 +74,9 @@ compiles a typed subset of Python, so the emitter and the runtime must stay insi
 - **Identifiers.** `names[].js` is the mangled identifier. Lean names mangle to `l_...`, which is
   valid in LPython source. The emitter's own temporaries use names such as `_rt`, `_Ctor`, `_ext`,
   `_inits`, `x_0`, and `block_0`.
+- **Types.** LPython is statically typed. The emitter must annotate functions and locals where
+  LPython requires it, using the IR's types. The runtime's public functions need matching
+  annotations. Dynamic Python types are not a substitute.
 - **Control flow.** Blocks become indentation. `case` lowers to `if`/`elif` unless the pinned
   LPython version supports `match`. Join points and `jmp` need a lowering that uses only supported
   control flow; do not assume that `try`/`except` is available. A self tail call becomes a
@@ -195,7 +198,7 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
 - **Test semantics.** Each fixture runs in its own empty directory, with `.args` and `.stdin` if
   present; expected output comes from native Lean; `--bless` regenerates it with native Lean.
   Generated source is compiled and run by LPython, and the test harness makes
-  `leanscript_runtime` visible to LPython. There are no Node or browser fixtures.
+  `leanscript_runtime` visible to LPython.
 - **LPython subset.** Emitted source and the runtime use only constructs supported by the pinned
   LPython version.
 - **Diagnostics.** Errors and warnings keep the `error:` and `warning:` prefixes.
@@ -209,9 +212,10 @@ behavior on native Lean.
 `lean-toolchain` pins Lean 4.35.0, and `flake.nix` provides elan. Lake builds `leanscript-ir` from
 `src/Main.lean`; `supportInterpreter` must stay enabled because user code can run at compile time.
 
-The backend and test harness need a Python environment in `pixi.toml`. The LPython compiler is a
-separate pinned dependency; add it to `pixi.toml` or the flake and record its version and supported
-Python subset. The `leanscript_runtime` package and generated code are compiled by LPython.
+The backend and test harness run on Python; that is the implementation language, not the target.
+They need a Python environment in `pixi.toml`. The LPython compiler is a separate pinned
+dependency; add it to `pixi.toml` or the flake and record its version and supported Python subset.
+The `leanscript_runtime` package and generated code are compiled by LPython.
 
 `python -m leanscript` depends on a built `leanscript-ir`. The CLI should look for it in a fixed
 order and report a clear error that names the missing executable and the build command when it
