@@ -6,6 +6,7 @@ platforms = ["linux-64", "linux-aarch64"]
 [tasks]
 test = { cmd = "python tests/run.py && python tests/ir_json.py", depends-on = ["build"] }
 build = "lake build"
+example = { cmd = "python examples/run.py", depends-on = ["build"] }
 
 [dependencies]
 python = ">=3.11"

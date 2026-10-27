@@ -17,16 +17,22 @@ imports, no fixture sidecars, and no LPython subset rules or workarounds.
 
 ## Compile and run
 
-Build the frontend once from the repository root:
+`pixi run example <name>` compiles one example and runs it:
+
+```sh
+pixi run example hello
+```
+
+The task runs `pixi run build` first, compiles `examples/<name>.lean` to
+`.lake/build/examples/<name>.py`, and runs that file with `leanscript_runtime` importable, so a
+fresh checkout needs no separate build step. The name is the file stem without `.lean`; every
+example below works (`hello`, `numbers`, `arrays`, `strings`, `closures`, `inductives`, `refs`).
+An unknown or missing name prints the list of names and exits with status 2.
+
+The same steps by hand:
 
 ```sh
 pixi run build
-```
-
-Then compile one example and run the emitted source, using `pixi run` so that the environment's
-`lean` is on `PATH`:
-
-```sh
 pixi run python -m leanscript compile examples/hello.lean -o .lake/build/examples/hello.py
 PYTHONPATH=. pixi run python .lake/build/examples/hello.py
 ```
@@ -38,14 +44,9 @@ PYTHONPATH=. pixi run python .lake/build/examples/hello.py
   backend writes `<input>.py` next to the input.
 - `PYTHONPATH=.` lets the generated program import `leanscript_runtime` from the repository root.
 
-To compile and run all of them:
-
-```sh
-for name in hello numbers arrays strings closures inductives refs; do
-  pixi run python -m leanscript compile "examples/$name.lean" -o ".lake/build/examples/$name.py"
-  PYTHONPATH=. pixi run python ".lake/build/examples/$name.py"
-done
-```
+All seven examples pass under pixi's Lean 4.33.0 and under the pinned 4.35.0. `refs` calls the
+`ST.Prim.Ref.set` extern; `leanscript_runtime/ref.py` registers both the `set` and `put` spellings,
+so the example runs on either toolchain.
 
 Each program prints to standard output and exits with status 0. Their output matches native Lean
 4.35.0 (`lean -c` followed by `leanc`).

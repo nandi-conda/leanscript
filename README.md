@@ -16,7 +16,9 @@ the decision and the component scope. See also [the IR JSON boundary](docs/ir-js
 
 `pixi run build` runs `lake build` and produces the Lean frontend,
 `.lake/build/bin/leanscript-ir`. `pixi run test` runs the build first and then the fixture suite,
-so a fresh checkout needs no separate build step.
+so a fresh checkout needs no separate build step. `pixi run example hello` builds the frontend and
+then compiles and runs `examples/hello.lean`; every name in `examples/` works. See
+[`examples/README.md`](examples/README.md).
 
 Run the compiler through `pixi run`, for example `pixi run python -m leanscript compile
 examples/hello.lean`. The frontend runs `lean --print-prefix` at run time to locate Lean's standard
