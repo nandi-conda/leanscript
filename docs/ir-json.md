@@ -1,7 +1,7 @@
 # IR JSON boundary
 
 `leanscript-ir dump-json <file.lean> [-o <out.json>]` produces one JSON object. This document is
-the contract between `src/LeanScript/DumpJson.lean` and the Python backend. The JSON is compact,
+the contract between `src/LeanScript/DumpJson.lean` and the Python emitter. The JSON is compact,
 with no whitespace, and is written on a single line.
 
 ## Top-level object
@@ -22,8 +22,7 @@ assume the shape of the document. Name indexes are local to one document and mus
 across runs or compared with indexes from another document.
 
 `inits` can contain names that are not in `decls`, because it covers every imported module. The
-emitter must filter it to the declarations that are present, as the Lean emitter did with
-`inits.filter ctx.decls.contains`.
+emitter must filter it to the declarations that are present.
 
 Order is significant: `decls` is emitted in the given order, aliases are emitted after the
 declarations in the given order, and `inits` is emitted in the given order.
@@ -31,14 +30,29 @@ declarations in the given order, and `inits` is emitted in the given order.
 ## Name
 
 ```json
-{"str": "Lean.Name.toString", "js": "mangled", "display": "user-facing"}
+{"str": "Lean.Name.toString", "js": "l_mangled", "display": "user-facing"}
 ```
 
 | Field | Meaning |
 | --- | --- |
-| `str` | `Name.toString`. Used for extern lookup and matching against target extern sets. |
-| `js` | `Name.mangle "l_"`. Used as the JavaScript identifier. |
+| `str` | `Name.toString`. Used for extern lookup and matching against the Python runtime's extern table. |
+| `js` | The mangled identifier, from `Name.mangle "l_"`. The key is historical; the value is a valid Python identifier and is used in the emitted source. |
 | `display` | The private name stripped with `privateToUserName?`, or the name itself, as a string. Used in diagnostics. |
+
+## Target conventions
+
+- The emitted source is Python for CPython 3.11 or newer.
+- Every `js` value is a valid Python identifier. Lean names mangle to `l_...`, which is valid in
+  Python.
+- Generated source imports the Python runtime as `import leanscript_runtime as _rt`. The runtime
+  package lives at the project root; tests add it to `PYTHONPATH`.
+- Python integers are arbitrary precision. The runtime applies the wrapping rules for the IR's
+  fixed-width types.
+- Lean strings are UTF-8 byte sequences. The runtime preserves Lean's string behavior even if the
+  generated code carries Python `str` values.
+- Reference-count operations become runtime calls. The runtime may treat objects as always shared
+  at first; that preserves semantics while `reuse` allocates instead of mutating in place.
+- `unreachable` raises the runtime's unreachable exception.
 
 ## Declaration
 
@@ -149,5 +163,5 @@ within a declaration.
 {"k": "default", "b": {...}}
 ```
 
-Alternatives are emitted in the given order. A `case` with no `default` alternative needs the
-runtime's unreachable path, exactly as `emitCase` did in Lean.
+Alternatives are emitted in the given order. A `case` with no `default` alternative raises the
+runtime's unreachable path.
