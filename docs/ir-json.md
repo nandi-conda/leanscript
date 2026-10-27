@@ -1,7 +1,7 @@
 # IR JSON boundary
 
 `leanscript-ir dump-json <file.lean> [-o <out.json>]` produces one JSON object. This document is
-the contract between `src/LeanScript/DumpJson.lean` and the Python emitter. The JSON is compact,
+the contract between `src/LeanScript/DumpJson.lean` and the LPython emitter. The JSON is compact,
 with no whitespace, and is written on a single line.
 
 ## Top-level object
@@ -17,7 +17,7 @@ with no whitespace, and is written on a single line.
 | `mainArity` | number | The number of parameters of `main`. |
 | `errorToString` | name index | The name `IO.Error.toString`. |
 
-The current schema version is 1. The Python loader must reject any other version rather than
+The current schema version is 1. The backend loader must reject any other version rather than
 assume the shape of the document. Name indexes are local to one document and must not be stored
 across runs or compared with indexes from another document.
 
@@ -35,24 +35,31 @@ declarations in the given order, and `inits` is emitted in the given order.
 
 | Field | Meaning |
 | --- | --- |
-| `str` | `Name.toString`. Used for extern lookup and matching against the Python runtime's extern table. |
-| `js` | The mangled identifier, from `Name.mangle "l_"`. The key is historical; the value is a valid Python identifier and is used in the emitted source. |
+| `str` | `Name.toString`. Used for extern lookup and matching against the runtime's extern table. |
+| `js` | The mangled identifier, from `Name.mangle "l_"`. The key is historical; the value is a valid identifier in LPython source and is used in the emitted source. |
 | `display` | The private name stripped with `privateToUserName?`, or the name itself, as a string. Used in diagnostics. |
 
 ## Target conventions
 
-- The emitted source is Python for CPython 3.11 or newer.
-- Every `js` value is a valid Python identifier. Lean names mangle to `l_...`, which is valid in
-  Python.
-- Generated source imports the Python runtime as `import leanscript_runtime as _rt`. The runtime
-  package lives at the project root; tests add it to `PYTHONPATH`.
-- Python integers are arbitrary precision. The runtime applies the wrapping rules for the IR's
-  fixed-width types.
-- Lean strings are UTF-8 byte sequences. The runtime preserves Lean's string behavior even if the
-  generated code carries Python `str` values.
-- Reference-count operations become runtime calls. The runtime may treat objects as always shared
-  at first; that preserves semantics while `reuse` allocates instead of mutating in place.
-- `unreachable` raises the runtime's unreachable exception.
+- The emitted source is LPython source. It must stay within the Python subset supported by the
+  pinned LPython compiler.
+- Every `js` value is a valid identifier in LPython source. Lean names mangle to `l_...`.
+- Generated files start with `import leanscript_runtime as _rt`. The runtime package lives at the
+  project root and must be importable by LPython; the test harness makes it visible to the
+  compiler.
+- The emitter imports `leanscript_runtime.externs` directly for target checks. There is no
+  generated extern file. The module must be plain data that both the backend's Python and LPython
+  can import.
+- LPython has fixed-width numeric types. The runtime maps the IR's integer types to LPython types
+  and preserves Lean's wrapping rules. Do not assume arbitrary-precision Python integers.
+- Lean strings are UTF-8 byte sequences. The LPython runtime must preserve that behavior,
+  including byte length and indexing, under LPython's string representation.
+- Reference-count operations become runtime calls. LPython manages memory, so `inc`, `dec`, and
+  `del` may be no-ops. `reset`, `isShared`, and `reuse` must preserve exclusive-update semantics;
+  a conservative `isShared` that always returns true is correct but allocates.
+- `unreachable` uses the runtime's error path; verify that LPython supports it.
+- The generated module is compiled by LPython ahead of time. It must not rely on CPython-only
+  modules or dynamic features.
 
 ## Declaration
 
@@ -163,5 +170,5 @@ within a declaration.
 {"k": "default", "b": {...}}
 ```
 
-Alternatives are emitted in the given order. A `case` with no `default` alternative raises the
+Alternatives are emitted in the given order. A `case` with no `default` alternative uses the
 runtime's unreachable path.

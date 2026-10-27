@@ -1,9 +1,11 @@
 # leanscript
-Lean to Python
+Lean to LPython
 
-leanscript compiles Lean 4 programs to Python. Lean stays in the frontend: it elaborates the input
-and collects the compiler IR, and a Python backend emits `.py` against a Python runtime. The
-JavaScript emitter, runtime, and tests are being retired in favor of the Python target.
+leanscript compiles Lean 4 programs to LPython source. Lean stays in the frontend: it elaborates
+the input and collects the compiler IR, and a Python backend emits LPython source (`.py`) that
+imports `leanscript_runtime`. LPython is the target compiler, not CPython; it compiles the
+generated source. The JavaScript emitter, runtime, and tests are being retired in favor of the
+LPython target.
 
 See [the refactor plan](docs/refactor-plan.md) and [the IR JSON boundary](docs/ir-json.md).
 

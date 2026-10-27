@@ -1,21 +1,23 @@
-# Refactor plan: Lean frontend, Python target
+# Refactor plan: Lean frontend, LPython target
 
 ## Decision
 
-Lean stays in the pipeline, and the transpile target changes from JavaScript to Python.
+Lean stays in the pipeline, and the transpile target changes from JavaScript to LPython.
 
 - **Lean remains the frontend.** Lean elaborates the source, runs compile-time code, and collects
   the compiler IR from a `Lean.Environment`. The elaborator, IR collection, alias resolution, init
   order, and name handling are unchanged.
-- **The backend emits Python.** A Python program reads the IR and emits `.py` source. Generated
-  programs run on CPython against a Python runtime.
-- **The runtime, target externs, and tests are Python.** The JavaScript runtime and the JavaScript
-  test harness leave the pipeline.
+- **The backend emits LPython source.** A Python program reads the IR and emits `.py` source for
+  LPython. The target is LPython, the LPython compiler, not generic CPython.
+- **The runtime and tests target LPython.** Generated programs import the `leanscript_runtime`
+  package and are compiled and run by LPython. The test harness invokes the LPython toolchain.
 - **JavaScript output is retired.** The Lean JS emitter stays only as a semantic reference until
-  the Python emitter passes the fixture suite, then it is removed.
+  the LPython emitter passes the fixture suite, then it is removed.
 
-This is a target change, not a Lean-to-Python translation of the compiler. The compiler core stays
-in Lean; the code generator and the target runtime are Python because the target is Python.
+This is a target change from JavaScript to LPython, not a translation of the compiler into
+Python. The compiler core stays in Lean; the code generator and the target runtime are written for
+LPython because LPython is the target. The backend is a compiler back end for LPython, not an
+ad-hoc Python emitter.
 
 ## Why Lean stays
 
@@ -28,62 +30,80 @@ The frontend and IR collection depend on Lean itself:
 - The collected IR is Lean's own compiler IR, including `Name`s whose mangling and display forms
   the emitter needs.
 
-Reimplementing those pieces in Python would duplicate Lean's elaborator. The Python backend does
-not need to: it consumes the IR that Lean produces.
+Reimplementing those pieces in the backend would duplicate Lean's elaborator. The backend does not
+need to: it consumes the IR that Lean produces.
 
 ## Non-goals
 
-- Translating Lean's elaborator, IR collection, or `Environment` APIs to Python.
+- Rewriting Lean's elaborator, IR collection, or `Environment` APIs in Python.
 - Keeping JavaScript as an output target.
 - Changing the IR that Lean collects beyond the target-neutral JSON boundary.
 - Adding Lean language features during the migration.
 
 ## Target pipeline
 
-Lean 4 source → Lean IR → JSON → Python emitter → `.py` → Python runtime.
+Lean 4 source → Lean IR → JSON → LPython emitter → LPython source (`.py`) → LPython runtime.
 
 | Stage | Language | Location | Responsibility |
 | --- | --- | --- | --- |
 | Frontend | Lean | `src/LeanScript/Frontend.lean` | Elaborate a source file and return its `Environment`. |
 | IR collection | Lean | `src/LeanScript/Collect.lean` | Compute the declaration closure from `main`, `IO.Error.toString`, and `IO Unit` initializers; resolve exported aliases; record init functions and startup order. |
-| Boundary | Lean | `src/LeanScript/DumpJson.lean`, `src/Main.lean` | Produce one JSON program for the Python emitter. |
+| Boundary | Lean | `src/LeanScript/DumpJson.lean`, `src/Main.lean` | Produce one JSON program for the LPython emitter. |
 | IR loading | Python | `leanscript/ir.py` | Decode and validate the JSON program; resolve the name table. |
 | Call paths | Python | `leanscript/emit.py` | Walk the dumped IR to explain unavailable externs. |
-| Target externs | Python | `leanscript/target.py`, `scripts/gen_target_externs.py` | List the externs that the Python runtime implements. |
-| Python emission | Python | `leanscript/emit.py` | Emit `.py` source from the IR. |
-| Python runtime | Python | `leanscript_runtime/` | Constructors, numbers, strings, references, IO, and the entry point for generated programs. |
-| CLI | Python | `leanscript/cli.py`, `leanscript/__main__.py` | Compile to `.py`; keep the command, flags, diagnostics, and exit codes. |
-| Tests | Python | `tests/run.py` | Compile fixtures to `.py`, run them with CPython, and compare their behavior. |
+| Extern table | Python and LPython | `leanscript_runtime.externs` | A plain data module with the runtime's implemented externs. The emitter checks names against it; there is no generated extern file. |
+| LPython emission | Python | `leanscript/emit.py` | Emit LPython source from the IR. |
+| LPython runtime | LPython | `leanscript_runtime/` | Constructors, numbers, strings, references, IO, and the entry point, written in the Python subset that LPython supports. |
+| CLI | Python | `leanscript/cli.py`, `leanscript/__main__.py` | Emit LPython source (default next to the input); delegate `dump-ir` and `list-externs` to `leanscript-ir`. |
+| Tests | Python | `tests/run.py` | Compile fixtures to LPython source, compile and run them with LPython, and compare their behavior. |
 
 The Lean frontend and the JSON boundary are the only Lean parts of the production path. The
-JavaScript emitter, the JavaScript runtime, and the JavaScript tooling are not part of the Python
+JavaScript emitter, the JavaScript runtime, and the JavaScript tooling are not part of the LPython
 target.
 
-## What "Python target" changes
+## What targeting LPython changes
 
 The IR is target-neutral. The existing JavaScript emitter and runtime are the semantic reference
-for the new target, but the Python emitter is not a token-for-token translation of them. It must
-produce valid Python syntax and use the Python runtime ABI:
+for the new target, but the LPython emitter is not a token-for-token translation of them. LPython
+compiles a typed subset of Python, so the emitter and the runtime must stay inside that subset:
 
+- **Source header.** Generated files start with `import leanscript_runtime as _rt`.
+- **Subset.** Emitted code and the `leanscript_runtime` package must use only constructs that the
+  pinned LPython version supports. The emitter and runtime plan must be checked against that
+  version, not against CPython.
 - **Identifiers.** `names[].js` is the mangled identifier. Lean names mangle to `l_...`, which is
-  valid in Python. The emitter's own temporaries use Python-safe names (`_rt`, `_Ctor`, `_ext`,
-  `_inits`, `x_0`, `block_0`), not the JavaScript `$...` names.
-- **Control flow.** Blocks become indentation. `case` lowers to `match` or `if`/`elif`. Join
-  points and `jmp` need a Python lowering that preserves labeled-block semantics; a self tail call
-  becomes a `while True` loop with parameter reassignment.
-- **Constructors.** A runtime `Ctor` class holds the tag, object fields, and scalar fields.
-- **Numbers.** Python integers are arbitrary precision. Fixed-width operations must apply the same
-  wrapping rules as the IR types; `uint64` and `usize` need explicit handling.
-- **Strings.** Lean strings are UTF-8 byte sequences. The runtime must preserve that behavior, such
-  as byte length and indexing, even if generated code carries Python `str` values.
-- **Ownership.** `inc`, `dec`, `del`, `reset`, `isShared`, and `reuse` become runtime calls. A first
-  implementation may treat objects as always shared, so `reuse` allocates and the reference-count
-  operations are no-ops. That preserves semantics; optimized reference counting can follow.
+  valid in LPython source. The emitter's own temporaries use names such as `_rt`, `_Ctor`, `_ext`,
+  `_inits`, `x_0`, and `block_0`.
+- **Control flow.** Blocks become indentation. `case` lowers to `if`/`elif` unless the pinned
+  LPython version supports `match`. Join points and `jmp` need a lowering that uses only supported
+  control flow; do not assume that `try`/`except` is available. A self tail call becomes a
+  `while True` loop with parameter reassignment.
+- **Constructors.** A runtime `Ctor` class holds the tag, object fields, and scalar fields. The
+  class must be expressible in LPython.
+- **Numbers.** LPython has fixed-width numeric types. Map the IR types to LPython types and preserve
+  Lean's wrapping rules. Do not assume CPython's arbitrary-precision integers; large `Nat` and
+  `Int` values need explicit runtime support or a documented limit.
+- **Strings.** Lean strings are UTF-8 byte sequences. The runtime must preserve that behavior under
+  LPython's string representation, including byte length and indexing.
+- **Ownership.** LPython manages memory. `inc`, `dec`, and `del` may become no-ops if the semantics
+  hold. `reset`, `isShared`, and `reuse` must still preserve exclusive-update semantics; a
+  conservative `isShared` that always returns true makes `reuse` allocate and is correct, but it
+  must be checked against the fixtures.
 - **Startup.** Nullary declarations use the runtime's lazy cell or init cell. The `inits` list runs
   in order at startup, and `main` runs through `run_main` with `mainArity`.
-- **Externs.** The runtime provides the names in the target extern table. An unavailable extern
-  becomes a runtime function that raises the same diagnostic.
-- **Unreachable.** `unreachable` raises the runtime's unreachable exception.
+- **Externs.** The emitter imports `leanscript_runtime.externs` directly. There is no generated
+  extern file and no target selection. The module must be plain data that both the backend's Python
+  and LPython can import. Without `--allow-unavailable`, a missing extern fails compilation; with
+  it, the extern becomes a stub that raises the same diagnostic.
+- **Errors.** `unreachable` and unavailable externs need an error path that LPython supports. If
+  LPython's exception support is insufficient, use a runtime abort or error call with the same
+  observable behavior.
+- **Compilation model.** The generated `.py` is compiled by LPython ahead of time. It must not rely
+  on CPython-only modules, dynamic imports, or runtime reflection.
+
+This is the main new risk: the emitter and the runtime must be validated against the pinned
+LPython compiler, not against CPython. A construct that works in CPython may be rejected by
+LPython, and a type that CPython accepts may need an explicit LPython type.
 
 ## Lean-side interfaces
 
@@ -98,7 +118,7 @@ The Lean executable is `leanscript-ir`; the user-facing command is `leanscript`.
 | `leanscript-ir list-externs <file.lean>` | Pretty-printed extern declarations for debugging. |
 
 `dump-ir` and `list-externs` stay in Lean because they print Lean's `Format` values. They are
-developer tools; the Python CLI may delegate to them.
+developer tools; the `leanscript` CLI may delegate to them.
 
 The `dump-json` command is the production boundary. Its contract is in `docs/ir-json.md`. In short:
 
@@ -109,10 +129,10 @@ The `dump-json` command is the production boundary. Its contract is in `docs/ir-
   trailing newline.
 - Failures print `error: <message>` on standard error and exit with status 1.
 - The module is elaborated with the interpreter enabled, so user code may run at compile time.
-- The Python CLI must invoke it without changing its working directory, because the frontend
+- The `leanscript` CLI must invoke it without changing its working directory, because the frontend
   resolves the source path and, potentially, compile-time file access relative to it.
 - The JSON schema is unchanged from the current version. `names[].js` carries the mangled
-  identifier, and that value is valid as a Python identifier.
+  identifier, and that value is valid in LPython source.
 
 ### What stays in Lean
 
@@ -121,13 +141,13 @@ The `dump-json` command is the production boundary. Its contract is in `docs/ir-
 - `dumpIrDecls`.
 - `DumpJson.programJson` and the name table.
 
-### What the Python backend owns
+### What the backend owns
 
 - IR loading and validation.
 - Call-path reporting for unavailable externs.
-- Target extern tables and availability checks.
-- The Python emitter.
-- The Python runtime.
+- Extern availability checks against `leanscript_runtime.externs`.
+- The LPython emitter.
+- The LPython runtime package.
 - The user-facing CLI and the test harness.
 
 ### What is retired
@@ -146,30 +166,38 @@ collection, JSON dumper, and `leanscript-ir` remain, and every compile starts wi
    (Done.)
 2. **Finish the IR boundary.** Keep `dump-json` with `-o` and schema version 1; keep
    `names[].js` as the mangled identifier; build with Lake.
-3. **Build the Python runtime skeleton.** Add `Ctor`, extern resolution, lazy and init cells,
-   `run_main`, and the unreachable exception. It must run hand-written Python emitted from Hello.
-4. **Write the Python emitter.** Emit `.py` for the fixtures, starting with Hello and expanding
-   until every expression and body form is covered. The JavaScript emitter is the semantic
-   reference, not a source template.
-5. **Grow the runtime with the fixtures.** Add strings, arrays, fixed-width integers, reference
-   counting, IO, file system, and process support. Generate the target extern table from the
-   runtime.
-6. **Replace the test harness.** `tests/run.py` compiles each fixture to `.py`, runs it with
-   CPython, and compares stdout and exit codes. `--bless` still compiles and runs native Lean.
+3. **Pin LPython and build the runtime skeleton.** Add the LPython compiler to the environment and
+   record its supported subset. Add `Ctor`, extern resolution, lazy and init cells, `run_main`,
+   and an error path. Compile and run a hand-written Hello module with LPython.
+4. **Write the LPython emitter.** Emit LPython source for the fixtures, starting with Hello and
+   expanding until every expression and body form is covered. The JavaScript emitter is the
+   semantic reference, not a source template.
+5. **Grow the runtime with the fixtures.** Add strings, arrays, fixed-width integers, ownership
+   operations, IO, file system, and process support. Keep every module inside the LPython subset.
+   Wire the emitter's extern checks to `leanscript_runtime.externs`.
+6. **Replace the test harness.** `tests/run.py` compiles each fixture to LPython source, invokes
+   the pinned LPython toolchain, runs the result, and compares stdout and exit codes. `--bless`
+   still compiles and runs native Lean.
 7. **Switch the build and CLI.** Update `pixi.toml`, `package.json`, `flake.nix`, and the README.
-   The CLI compiles to `.py` by default and locates `leanscript-ir`.
+   Pin the LPython compiler. The CLI writes `<input>.py` next to the input by default and locates
+   `leanscript-ir`.
 8. **Retire the JavaScript path.** Remove the Lean JS emitter, the JavaScript runtime, and the
-   JavaScript scripts after the Python suite passes.
+   JavaScript scripts after the LPython suite passes.
 
 ## Contracts to preserve
 
 - **Program behavior.** Standard output, exit codes, arguments, standard input, initializer order,
   and error text.
-- **Command-line shape.** `compile`, `-o` (default `<input>.py`), `--runtime` (runtime import
-  name), and `--allow-unavailable`. There is one target, Python; there is no `--target` flag.
-  Error and warning text keeps the same wording.
+- **Command-line shape.** `compile`, `-o` (default `<input>.py` next to the input), and
+  `--allow-unavailable`. There is one target, LPython; there is no `--target` or `--runtime` flag.
+  `dump-ir` and `list-externs` delegate to `leanscript-ir`. Error and warning text keeps the same
+  wording.
 - **Test semantics.** Each fixture runs in its own empty directory, with `.args` and `.stdin` if
   present; expected output comes from native Lean; `--bless` regenerates it with native Lean.
+  Generated source is compiled and run by LPython, and the test harness makes
+  `leanscript_runtime` visible to LPython. There are no Node or browser fixtures.
+- **LPython subset.** Emitted source and the runtime use only constructs supported by the pinned
+  LPython version.
 - **Diagnostics.** Errors and warnings keep the `error:` and `warning:` prefixes.
 - **IR JSON.** Version 1; unchanged from the current schema.
 
@@ -181,8 +209,9 @@ behavior on native Lean.
 `lean-toolchain` pins Lean 4.35.0, and `flake.nix` provides elan. Lake builds `leanscript-ir` from
 `src/Main.lean`; `supportInterpreter` must stay enabled because user code can run at compile time.
 
-The Python backend, runtime, and tests need a Python 3.11 or newer environment in `pixi.toml`. The
-JavaScript tooling leaves the dev shell when the JavaScript path is retired.
+The backend and test harness need a Python environment in `pixi.toml`. The LPython compiler is a
+separate pinned dependency; add it to `pixi.toml` or the flake and record its version and supported
+Python subset. The `leanscript_runtime` package and generated code are compiled by LPython.
 
 `python -m leanscript` depends on a built `leanscript-ir`. The CLI should look for it in a fixed
 order and report a clear error that names the missing executable and the build command when it
@@ -193,9 +222,16 @@ cannot find it.
 The JSON boundary is versioned at 1. Any breaking change to the schema must bump the version, and
 the Python loader rejects versions it does not know.
 
-- How should the runtime represent strings: Python `str` with byte-oriented helpers, or a byte
+- Which Python subset does the pinned LPython version support: `match`, exceptions, classes,
+  dynamically sized arrays, string methods, and `sys` access?
+- How does LPython import `leanscript_runtime`? Does it compile the package from source, and what
+  module search path does it use?
+- Can `leanscript_runtime.externs` stay a plain data module that both the backend's Python and
+  LPython can import? If not, the no-generated-extern-file rule needs revisiting.
+- How should the runtime map Lean `Nat`, `Int`, `uint64`, and `usize` to LPython's fixed-width
+  types? Is big-integer support needed?
+- How should the runtime represent strings: LPython `str` with byte-oriented helpers, or a byte
   buffer? Lean string operations are UTF-8 based.
-- How should the runtime handle reference counting? A conservative no-op implementation preserves
-  semantics; an explicit count enables in-place reuse. What happens to the RC debug mode?
-- How do generated `.py` files find `leanscript_runtime` outside the repository? Tests add the
-  project root to `PYTHONPATH`; packaging for other users is still open.
+- Does LPython expose enough of its memory model to implement `isShared`, or should the emitter
+  treat objects as always shared? What happens to the reference-count debug mode?
+- Does LPython support the error path needed for `unreachable` and unavailable externs?
