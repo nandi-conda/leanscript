@@ -33,6 +33,12 @@ different version.
 `lean-toolchain` pins Lean 4.35.0 for elan-based setups; use the Nix dev shell or an elan install
 when you need that exact toolchain (`flake.nix` provides elan and Python 3, with no Node or pnpm).
 
+Lean 4's language server needs no separate package: the `lean4` dependency installs `lean`, `lake`,
+and the server they start. `pixi run lsp` runs `lean --server` on stdio, and `pixi run lake serve`
+runs the same server with the project's Lake configuration. Point an editor's Lean 4 extension at
+`lake` in the pixi environment (`.pixi/envs/default/bin/lake`) to get diagnostics from the pixi
+toolchain.
+
 `tests/run.py` runs generated source with CPython 3.11 or newer. There is no runner switch.
 The fixture suite is 22/22 and `tests/ir_json.py` passes. `tests/lpython/` and the pinned LPython
 dependency are evidence for the rejected path, not part of `pixi run test`. See `tests/README.md`.

@@ -9,12 +9,21 @@ build = "lake build"
 example = { cmd = "python examples/run.py", depends-on = ["build"] }
 transpile = { cmd = "python examples/run.py --no-run", depends-on = ["build"] }
 
+# Lean 4's language server is built into the `lean` binary; this task starts it on stdio,
+# the transport editors expect. `pixi run lake serve` is the project-aware equivalent.
+lsp = "lean --server"
+
 [dependencies]
 python = ">=3.11"
 
 # Lake ships with Lean 4. conda-forge's newest lean4 is 4.33.0, while lean-toolchain pins
 # leanprover/lean4:v4.35.0 for the frontend. `pixi run lake` therefore uses 4.33.0; elan
 # remains the way to build with the pinned 4.35.0 toolchain.
+#
+# The lean4 package provides `lean`, `lake`, the Lean server (Lean 4 Server 0.3.0, reached
+# with `lean --server` or `lake serve`), and the compiled standard library. conda-forge has
+# no Lean 4 LSP package of its own; `lean-language-server` is the retired Lean 3 server, so
+# do not add it. Editors should start `lake serve` (or `pixi run lsp`) from the project root.
 lean4 = "==4.33.0"
 
 # LPython 0.22.0 is retained only for the rejection evidence in tests/lpython/run_probes.py.
