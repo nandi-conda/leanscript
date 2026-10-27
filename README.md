@@ -35,9 +35,30 @@ when you need that exact toolchain (`flake.nix` provides elan and Python 3, with
 
 Lean 4's language server needs no separate package: the `lean4` dependency installs `lean`, `lake`,
 and the server they start. `pixi run lsp` runs `lean --server` on stdio, and `pixi run lake serve`
-runs the same server with the project's Lake configuration. Point an editor's Lean 4 extension at
-`lake` in the pixi environment (`.pixi/envs/default/bin/lake`) to get diagnostics from the pixi
-toolchain.
+runs the same server with the project's Lake configuration.
+
+An editor started from a desktop icon does not inherit the shell `PATH` or `ELAN_HOME`, and Zed's
+Lean 4 extension does not look in `.pixi`, so give it the pixi `lake` explicitly:
+
+```json
+{
+  "lsp": {
+    "lean4-lsp": {
+      "binary": {
+        "path": "/home/you/leanscript/.pixi/envs/default/bin/lake",
+        "arguments": ["serve", "--"]
+      }
+    }
+  }
+}
+```
+
+The path must be absolute: the extension uses it as given, not relative to the worktree. Run
+`pixi install` once so the environment exists, and confirm the path with
+`pixi run bash -c 'command -v lake'`, which also covers a detached environment in the pixi cache
+instead of `.pixi/envs`. This server is Lean 4.33.0, so keep building with pixi; Lean rejects
+`.olean` files from another version. For the 4.35.0 pin, point Zed at `~/.elan/bin/lake` after
+`elan toolchain install`, or enable the extension's `elan_auto_install` setting instead.
 
 `tests/run.py` runs generated source with CPython 3.11 or newer. There is no runner switch.
 The fixture suite is 22/22 and `tests/ir_json.py` passes. `tests/lpython/` and the pinned LPython
