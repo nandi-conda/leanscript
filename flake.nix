@@ -1,5 +1,5 @@
 {
-  description = "A Lean to JavaScript compiler and runtime";
+  description = "A Lean 4 to Python compiler";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -23,8 +23,7 @@
             # We use elan rather than `pkgs.lean4` so the toolchain is pinned by
             # `lean-toolchain`, which is what Lake and editor integrations read.
             pkgs.elan
-            pkgs.nodejs
-            pkgs.pnpm
+            pkgs.python3
           ];
         };
       });

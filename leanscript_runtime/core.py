@@ -303,18 +303,22 @@ def run_main(inits: list, main, arity: int, error_to_string) -> None:
     result: dict[str, int] = {}
 
     def run() -> None:
-        if not _run_inits(inits, error_to_string):
-            result["status"] = 1
-            return
-        if arity == 2:
-            r = main(array_to_list([mk_string(a) for a in sys.argv[1:]]), 0)
-        else:
-            r = main(0)
-        if r.tag == 0:
-            value = r.f[0]
-            result["status"] = value if isinstance(value, int) else 0
-        else:
-            result["status"] = _report_error(r, error_to_string)
+        try:
+            if not _run_inits(inits, error_to_string):
+                result["status"] = 1
+                return
+            if arity == 2:
+                r = main(array_to_list([mk_string(a) for a in sys.argv[1:]]), 0)
+            else:
+                r = main(0)
+            if r.tag == 0:
+                value = r.f[0]
+                result["status"] = value if isinstance(value, int) else 0
+            else:
+                result["status"] = _report_error(r, error_to_string)
+        except SystemExit as done:
+            code = done.code
+            result["status"] = code if isinstance(code, int) else 0
 
     if sys.getrecursionlimit() < 200_000:
         sys.setrecursionlimit(200_000)
