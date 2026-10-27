@@ -6,9 +6,9 @@ imports, no fixture sidecars, and no LPython subset rules or workarounds.
 
 ## Prerequisites
 
-- Lean 4.35.0, with `lake` and `lean` on `PATH` (for example from elan; see the repository
-  README). `lake build` in the repository root builds `.lake/build/bin/leanscript-ir`, which the
-  backend invokes.
+- The Lean frontend from this repository. `pixi run build` in the repository root runs `lake
+  build` and produces `.lake/build/bin/leanscript-ir`, which the backend invokes. With an elan
+  setup, `lake build` uses the pinned Lean 4.35.0 instead.
 - CPython 3.11 or newer. The commands below use `python`; inside the pixi environment, prefix them
   with `pixi run`.
 
@@ -17,7 +17,7 @@ imports, no fixture sidecars, and no LPython subset rules or workarounds.
 Build the frontend once from the repository root:
 
 ```sh
-lake build
+pixi run build
 ```
 
 Then compile one example and run the emitted source:

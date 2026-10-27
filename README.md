@@ -12,11 +12,15 @@ no closures or exceptions, and no writable IO or stdin. [The probe report](docs/
 records the matrix and the exact diagnostics; [the refactor plan](docs/refactor-plan.md) records
 the decision and the component scope. See also [the IR JSON boundary](docs/ir-json.md).
 
-## Tests
+## Build and tests
 
-`pixi run test` runs the fixture suite. The first run needs `lake build` and `lean` on `PATH` from
-elan; the pixi environment alone cannot elaborate Lean source. Use the Nix dev shell or an elan
-install (`flake.nix` provides elan and Python 3, with no Node or pnpm).
+`pixi run build` runs `lake build` and produces the Lean frontend,
+`.lake/build/bin/leanscript-ir`. `pixi run test` runs the build first and then the fixture suite,
+so a fresh checkout needs no separate build step.
+
+`pixi.toml` provides Lean 4.33.0 from conda-forge, the newest version available there.
+`lean-toolchain` pins Lean 4.35.0 for elan-based setups; use the Nix dev shell or an elan install
+when you need that exact toolchain (`flake.nix` provides elan and Python 3, with no Node or pnpm).
 
 `tests/run.py` runs generated source with CPython 3.11 or newer. There is no runner switch.
 The fixture suite is 22/22 and `tests/ir_json.py` passes. `tests/lpython/` and the pinned LPython

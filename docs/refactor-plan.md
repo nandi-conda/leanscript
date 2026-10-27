@@ -206,8 +206,8 @@ The `dump-json` command is the production boundary. Its contract is in `docs/ir-
 - Failures print `error: <message>` on standard error and exit with status 1.
 - The module is elaborated with the interpreter enabled, so user code may run at compile time.
 - The `leanscript` CLI runs `leanscript-ir` from the project root and passes an absolute input
-  path, so elan finds the pinned Lean toolchain. Compile-time file access resolves relative to the
-  project root.
+  path, so compile-time file access resolves relative to the project root and elan-based setups
+  find the pinned toolchain.
 - The JSON schema is unchanged from version 1. `names[].js` carries the mangled identifier, and
   that value is valid in CPython source.
 
@@ -317,13 +317,13 @@ behavior on native Lean.
 
 ## Build and toolchain
 
-`lean-toolchain` pins Lean 4.35.0. `flake.nix` provides elan and Python 3; Node and pnpm are no
-longer part of the dev shell. Lake builds `leanscript-ir` from `src/Main.lean`; `supportInterpreter`
-must stay enabled because user code can run at compile time.
+`lean-toolchain` pins Lean 4.35.0 for elan-based setups. `flake.nix` provides elan and Python 3;
+Node and pnpm are no longer part of the dev shell. Lake builds `leanscript-ir` from `src/Main.lean`;
+`supportInterpreter` must stay enabled because user code can run at compile time.
 
-Run `lake build` once, then `pixi run test` or `python tests/run.py` with `lean` on `PATH` from
-elan. The pixi environment alone cannot elaborate Lean source. Use the Nix dev shell or an elan
-install so `lake` and `lean` are available.
+`pixi run build` runs `lake build` with Lean 4.33.0, the newest version that conda-forge provides.
+`pixi run test` runs the build first and then the fixtures. Conda-forge has no Lean 4.35.0, so use
+the Nix dev shell or an elan install when the exact `lean-toolchain` pin matters.
 
 The backend, runtime, and test harness run on CPython 3.11 or newer; that is the implementation
 language and the target. `pixi.toml` provides the Python environment.
