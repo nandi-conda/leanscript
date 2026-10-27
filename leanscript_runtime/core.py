@@ -375,19 +375,6 @@ def init_scalars(x: object) -> None:
         x.s = {}
 
 
-class Jmp(Exception):
-    """A jump to a join point whose labeled block is not the innermost loop."""
-
-    __slots__ = ("j",)
-
-    def __init__(self, j: int):
-        self.j = j
-
-
-class Tail(Exception):
-    """A self tail call, which restarts the emitting function."""
-
-
 def mk_string(s: str):
     """Constructs a Lean string from a Python string."""
     from .string import mk_string as make
