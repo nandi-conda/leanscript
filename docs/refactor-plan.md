@@ -275,12 +275,13 @@ for `run_probes.py` evidence and are not part of `pixi run test`.
 `main` and `errorToString` inside `decls`, and the `-o` file contract. `.expected` and `.exitcode`
 remain native-Lean output and stay the semantic baseline.
 
-Final verified state after building `leanscript-ir` from Lean 4.35.0:
+Verified state after building `leanscript-ir` from Lean 4.35.0:
 
-- The fixture suite is 22/22 on CPython.
-- `tests/ir_json.py` passes against the real dumper.
-- `Cli` passes; the worker-thread `SystemExit` handling in `run_main` is fixed.
-- `InPlace` passes within the 300s timeout.
+- On `t_aa2c62a8`'s runtime branch `5d9c15c`: the fixture suite is 22/22 on CPython,
+  `tests/ir_json.py` passes against the real dumper, `Cli` passes, and `InPlace` passes within the
+  300s timeout.
+- On current main: 21/22. The only failure is `Cli` (exit 1 vs 3) because the worker-thread
+  `SystemExit` fix in `run_main` is not merged. Once `5d9c15c` lands, the 22/22 state is exact.
 
 Remaining gaps:
 
