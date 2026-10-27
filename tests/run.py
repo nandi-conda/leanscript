@@ -8,25 +8,23 @@ statement, as `docs/ir-json.md` requires. A generated-by comment may precede it.
 
 The generated program runs on the target selected by `LEANSCRIPT_TEST_RUNNER`:
 
-- `lpython` (the default, and the stated target): compile the source with
+- `cpython` (the default, and the target): run the source with the current interpreter, with the
+  repository root on `PYTHONPATH` so that `leanscript_runtime` resolves to the in-tree package.
+- `lpython`: the rejected target, kept only to reproduce the rejection evidence in
+  `docs/lpython-subset.md`. Compile the source with
   `lpython -I <root> -o <executable> <source>` and run the executable.
-- `cpython`: the fallback, which needs explicit user approval in `docs/refactor-plan.md`. Run the
-  source with the current interpreter, with the repository root on `PYTHONPATH` so that
-  `leanscript_runtime` resolves to the in-tree package.
 
 Keeping the runner in one place lets the suite switch without changing its expectations.
 
 Each program runs in its own empty working directory, with the arguments in the adjacent `.args`
 file (one per line) and the contents of the adjacent `.stdin` file as standard input, if those
 files exist. A fixture with an adjacent `.unsupported-lpython` file is skipped under the LPython
-runner, and its contents are printed as the reason. A skip never counts as a pass.
+runner, and its contents are printed as the reason. A skip never counts as a pass. The sidecar is
+evidence for the rejected compiler, so the target runner never reads it; `Cli` needs none, because
+it passes on CPython and is skipped only under LPython.
 
-While the LPython backend is incomplete, `LEANSCRIPT_TEST_RUNNER=cpython pixi run test` is the
-green path. The CPython runner is the explicitly flagged fallback in `docs/refactor-plan.md`.
-
-Memory is owned by the target runtime (CPython's or LPython's), so the suite does not check for
-reference-count leaks. A fixture fails if the runtime writes a `LeanScript: ` diagnostic to
-standard error.
+Memory is owned by the target runtime, so the suite does not check for reference-count leaks. A
+fixture fails if the runtime writes a `LeanScript: ` diagnostic to standard error.
 
 With `--bless`, instead regenerates the `.expected` and `.exitcode` files by compiling each
 program with native Lean and running it (`lean --run` is not used because it skips the main
@@ -56,7 +54,8 @@ runtime_header = "import leanscript_runtime as _rt"
 # The runtime uses this prefix for internal errors that do not by themselves change the exit code.
 # `docs/refactor-plan.md` pins it.
 runtime_error_marker = "LeanScript: "
-runner = os.environ.get("LEANSCRIPT_TEST_RUNNER", "lpython")
+# CPython 3 is the target. `lpython` stays selectable only to reproduce the rejection evidence.
+runner = os.environ.get("LEANSCRIPT_TEST_RUNNER", "cpython")
 lpython = os.environ.get("LPYTHON", "lpython")
 default_timeout = 300.0
 
@@ -232,12 +231,8 @@ def main(argv: list[str]) -> int:
     failures = 0
     skipped = 0
     if not args.bless:
-        fallback = (
-            ""
-            if runner != "lpython"
-            else "; the CPython fallback is `LEANSCRIPT_TEST_RUNNER=cpython`"
-        )
-        print(f"runner: {runner}{fallback}\n")
+        note = " (evidence for the rejected target)" if runner == "lpython" else ""
+        print(f"runner: {runner}{note}\n")
     for name in names:
         input_path = fixtures / f"{name}.lean"
         source_path = build / f"{name}.py"
