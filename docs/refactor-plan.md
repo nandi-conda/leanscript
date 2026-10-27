@@ -57,7 +57,7 @@ runtime port. Details and per-construct evidence are in `docs/lpython-subset.md`
 
 LPython can accept source only where the runtime or generated code is its input. The frontend, the
 IR JSON, the emitter, the CLI, and the harness are host tools; they were never inside the LPython
-subset and need no fallback.
+subset and need no LPython-specific variant.
 
 | Component | Compiled by LPython? | Scope decision | Reason |
 | --- | --- | --- | --- |
@@ -66,7 +66,7 @@ subset and need no fallback.
 | Runtime (`leanscript_runtime/`) | Yes | CPython 3 only. | Uses classes with methods, closures, exceptions, `bytearray`/`bytes`, file and `os` APIs, and dynamic values. See the matrix. |
 | Emitter (`leanscript/emit.py`) | No | Keep on CPython 3; emit CPython 3 source. | Host tool. The LPython annotation, dispatch, and subset rules are withdrawn. |
 | CLI (`leanscript/cli.py`, `leanscript/__main__.py`) | No | Keep on CPython 3. | Host tool; it writes generated `.py` next to the input. |
-| Tests (`tests/run.py`, `tests/ir_json.py`) | No | Keep on CPython 3; the default runner becomes CPython. | The harness runs generated programs and compares behavior. |
+| Tests (`tests/run.py`, `tests/ir_json.py`) | No | Keep on CPython 3; CPython is the only runner. | The harness runs generated programs and compares behavior. |
 | Generated programs | Yes | CPython 3 only. | They consume dynamic IR values and need exceptions, closures, strings, arrays, and IO. |
 | Probe matrix (`tests/lpython/`) | Yes | Keep as evidence, not as a target. | Reproduces the rejection. It is not part of `pixi run test`. |
 
@@ -275,13 +275,11 @@ for `run_probes.py` evidence and are not part of `pixi run test`.
 `main` and `errorToString` inside `decls`, and the `-o` file contract. `.expected` and `.exitcode`
 remain native-Lean output and stay the semantic baseline.
 
-Real-tree verification after building `leanscript-ir` from Lean 4.35.0:
+Final verified state after building `leanscript-ir` from Lean 4.35.0:
 
+- The fixture suite is 22/22 on CPython.
 - `tests/ir_json.py` passes against the real dumper.
-- The fixture suite is 21/22 with CPython. The only failure is `Cli` (exit 1, expected 3), because
-  `SystemExit` from `IO.Process.exit` is dropped in `run_main`'s worker thread. Stdout matches and
-  stderr is empty, so this is a runtime exit-status bug, not a harness or fixture issue. The fix is
-  in flight.
+- `Cli` passes; the worker-thread `SystemExit` handling in `run_main` is fixed.
 - `InPlace` passes within the 300s timeout.
 
 Remaining gaps:

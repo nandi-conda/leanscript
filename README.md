@@ -4,7 +4,7 @@ Lean to CPython 3
 leanscript compiles Lean 4 programs to CPython 3 source. Lean stays in the frontend: it elaborates
 the input and collects the compiler IR, and a Python backend emits CPython 3 source (`.py`) that
 imports `leanscript_runtime`. The target is CPython 3.11 or newer. The JavaScript emitter, runtime,
-and tooling are retired; they are no longer in the repository.
+and tooling, including the JS test harness, are retired; they are no longer in the repository.
 
 LPython 0.22.0 was evaluated as an alternative target and rejected: 21 of 32 compiler probes fail.
 The blockers include no object model, no arbitrary-precision integers (Lean `Nat` is unbounded),
@@ -19,7 +19,8 @@ elan; the pixi environment alone cannot elaborate Lean source. Use the Nix dev s
 install (`flake.nix` provides elan and Python 3, with no Node or pnpm).
 
 `tests/run.py` runs generated source with CPython 3.11 or newer. There is no runner switch.
-`tests/lpython/` and the pinned LPython dependency are evidence for the rejected path, not part of
-`pixi run test`. See `tests/README.md`.
+The verified state is 22/22 fixtures on CPython, with `tests/ir_json.py` passing. `tests/lpython/`
+and the pinned LPython dependency are evidence for the rejected path, not part of `pixi run test`.
+See `tests/README.md`.
 
 [![](https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:mss5l446ynjlw6e67y6u5fsq/bafkreigi4fxmqpn2d7soi4d344tipzamivhwofnulhye4unjc3ljmlke5u)](https://bsky.app/profile/tonofcrates.bsky.social/post/3my3zodphxk2k)
