@@ -18,7 +18,11 @@ Keeping the runner in one place lets the suite switch without changing its expec
 
 Each program runs in its own empty working directory, with the arguments in the adjacent `.args`
 file (one per line) and the contents of the adjacent `.stdin` file as standard input, if those
-files exist.
+files exist. A fixture with an adjacent `.unsupported-lpython` file is skipped under the LPython
+runner, and its contents are printed as the reason. A skip never counts as a pass.
+
+While the LPython backend is incomplete, `LEANSCRIPT_TEST_RUNNER=cpython pixi run test` is the
+green path. The CPython runner is the explicitly flagged fallback in `docs/refactor-plan.md`.
 
 Memory is owned by the target runtime (CPython's or LPython's), so the suite does not check for
 reference-count leaks. A fixture fails if the runtime writes a `LeanScript: ` diagnostic to
@@ -226,6 +230,14 @@ def main(argv: list[str]) -> int:
         native_dir.mkdir(parents=True, exist_ok=True)
 
     failures = 0
+    skipped = 0
+    if not args.bless:
+        fallback = (
+            ""
+            if runner != "lpython"
+            else "; the CPython fallback is `LEANSCRIPT_TEST_RUNNER=cpython`"
+        )
+        print(f"runner: {runner}{fallback}\n")
     for name in names:
         input_path = fixtures / f"{name}.lean"
         source_path = build / f"{name}.py"
@@ -234,6 +246,12 @@ def main(argv: list[str]) -> int:
         exitcode_path = fixtures / f"{name}.exitcode"
         args_path = fixtures / f"{name}.args"
         stdin_path = fixtures / f"{name}.stdin"
+        unsupported_path = fixtures / f"{name}.unsupported-lpython"
+        if not args.bless and runner == "lpython" and unsupported_path.exists():
+            reason = " ".join(unsupported_path.read_text(encoding="utf-8").split())
+            print(f"skip {name} (unsupported under lpython: {reason})")
+            skipped += 1
+            continue
         program_args = (
             args_path.read_text(encoding="utf-8").splitlines() if args_path.exists() else []
         )
@@ -304,7 +322,11 @@ def main(argv: list[str]) -> int:
             failures += 1
 
     if not args.bless:
-        print(f"\n{len(names) - failures}/{len(names)} passed")
+        ran = len(names) - skipped
+        summary = f"\n{ran - failures}/{ran} passed"
+        if skipped:
+            summary += f", {skipped} skipped"
+        print(summary)
     return 1 if failures else 0
 
 
