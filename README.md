@@ -18,6 +18,11 @@ the decision and the component scope. See also [the IR JSON boundary](docs/ir-js
 `.lake/build/bin/leanscript-ir`. `pixi run test` runs the build first and then the fixture suite,
 so a fresh checkout needs no separate build step.
 
+Run the compiler through `pixi run`, for example `pixi run python -m leanscript compile
+examples/hello.lean`. The frontend runs `lean --print-prefix` at run time to locate Lean's standard
+library, so `lean` must be on `PATH`; a plain Python environment does not provide it. Build and run
+with the same toolchain, because Lean rejects library files from a different version.
+
 `pixi.toml` provides Lean 4.33.0 from conda-forge, the newest version available there.
 `lean-toolchain` pins Lean 4.35.0 for elan-based setups; use the Nix dev shell or an elan install
 when you need that exact toolchain (`flake.nix` provides elan and Python 3, with no Node or pnpm).

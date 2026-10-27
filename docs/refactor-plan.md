@@ -336,6 +336,13 @@ install`, move it to a separate pixi feature environment; the probe script must 
 order: `LEANSCRIPT_IR`, `.lake/build/bin/leanscript-ir`, then `PATH`. If none exist, the error names
 the missing executable and the build command.
 
+Running the frontend also needs `lean` on `PATH`, or `LEAN_SYSROOT` set. The frontend calls
+`Lean.findSysroot`, which runs `lean --print-prefix` to find Lean's standard library; without it
+Lean fails with an uncaught "could not execute external process 'lean'" instead of a usable
+message. The CLI checks both before invoking the frontend and names the fix. Run the compiler
+through `pixi run`, and build and run with the same toolchain: Lean rejects library files from a
+different version.
+
 ## Open questions
 
 The JSON boundary is versioned at 1. Any breaking change to the schema must bump the version, and

@@ -73,13 +73,34 @@ def parse_compile_args(input: Path, rest: list[str]) -> CompileArgs:
     return args
 
 
+def require_lean() -> None:
+    """Raises `CliError` when the frontend cannot locate Lean's standard library.
+
+    The frontend runs `Lean.findSysroot`, which calls `lean --print-prefix` unless `LEAN_SYSROOT`
+    is set. Without `lean` on `PATH` that call fails, and Lean reports an opaque uncaught
+    exception instead of naming the missing compiler.
+    """
+    if os.environ.get("LEAN_SYSROOT"):
+        return
+    if shutil.which("lean") is not None:
+        return
+    raise CliError(
+        "cannot run the Lean frontend: `lean` is not on PATH and `LEAN_SYSROOT` is unset.\n"
+        "The frontend runs `lean --print-prefix` to find Lean's standard library.\n"
+        "Run the command through pixi (for example `pixi run python -m leanscript compile ...`),\n"
+        "or set `LEAN_SYSROOT` to the prefix that `lean --print-prefix` prints."
+    )
+
+
 def dump_program(input: Path) -> Program:
     """Runs the Lean frontend and loads the program it dumps."""
+    command = leanscript_ir()
+    require_lean()
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as file:
         temporary = Path(file.name)
     try:
         process = subprocess.run(
-            [leanscript_ir(), "dump-json", str(input.resolve()), "-o", str(temporary)],
+            [command, "dump-json", str(input.resolve()), "-o", str(temporary)],
             cwd=project_root(),
             capture_output=True,
             text=True,
@@ -130,8 +151,10 @@ def compile_module(args: CompileArgs) -> int:
 
 
 def run_frontend(command: str, path: Path) -> int:
+    frontend = leanscript_ir()
+    require_lean()
     return subprocess.run(
-        [leanscript_ir(), command, str(path.resolve())], cwd=project_root()
+        [frontend, command, str(path.resolve())], cwd=project_root()
     ).returncode
 
 

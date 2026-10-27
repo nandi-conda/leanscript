@@ -9,8 +9,11 @@ imports, no fixture sidecars, and no LPython subset rules or workarounds.
 - The Lean frontend from this repository. `pixi run build` in the repository root runs `lake
   build` and produces `.lake/build/bin/leanscript-ir`, which the backend invokes. With an elan
   setup, `lake build` uses the pinned Lean 4.35.0 instead.
-- CPython 3.11 or newer. The commands below use `python`; inside the pixi environment, prefix them
-  with `pixi run`.
+- CPython 3.11 or newer.
+- `lean` on `PATH`, or `LEAN_SYSROOT` set. The frontend runs `lean --print-prefix` to locate Lean's
+  standard library, so `lean` must be reachable from the shell that runs the backend. `pixi run`
+  provides it; a Python-only environment does not. Build and run the frontend with the same
+  toolchain, because Lean rejects library files from a different version.
 
 ## Compile and run
 
@@ -20,15 +23,17 @@ Build the frontend once from the repository root:
 pixi run build
 ```
 
-Then compile one example and run the emitted source:
+Then compile one example and run the emitted source, using `pixi run` so that the environment's
+`lean` is on `PATH`:
 
 ```sh
-python -m leanscript compile examples/hello.lean -o .lake/build/examples/hello.py
-PYTHONPATH=. python .lake/build/examples/hello.py
+pixi run python -m leanscript compile examples/hello.lean -o .lake/build/examples/hello.py
+PYTHONPATH=. pixi run python .lake/build/examples/hello.py
 ```
 
-- `python -m leanscript compile` runs the Lean frontend, reads the IR JSON, and writes CPython
-  source.
+- `pixi run python -m leanscript compile` runs the Lean frontend, reads the IR JSON, and writes
+  CPython source. A plain `python -m leanscript` works only when `lean` is on `PATH` (for example
+  in the Nix dev shell) or `LEAN_SYSROOT` is set.
 - `-o` keeps the generated `.py` in `.lake/build/examples/`, which Git ignores. Without `-o`, the
   backend writes `<input>.py` next to the input.
 - `PYTHONPATH=.` lets the generated program import `leanscript_runtime` from the repository root.
@@ -37,8 +42,8 @@ To compile and run all of them:
 
 ```sh
 for name in hello numbers arrays strings closures inductives refs; do
-  python -m leanscript compile "examples/$name.lean" -o ".lake/build/examples/$name.py"
-  PYTHONPATH=. python ".lake/build/examples/$name.py"
+  pixi run python -m leanscript compile "examples/$name.lean" -o ".lake/build/examples/$name.py"
+  PYTHONPATH=. pixi run python ".lake/build/examples/$name.py"
 done
 ```
 
