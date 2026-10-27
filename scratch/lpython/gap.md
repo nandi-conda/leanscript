@@ -1,9 +1,9 @@
 # LPython 0.22 runtime gap
 
-LPython 0.22.0 is the stated target. The modules in `leanscript_runtime/` are currently
-CPython-shaped and stay as the semantic reference; this note records, per file, exactly which
-constructs LPython 0.22 rejects and what has to replace them. Every verdict below was produced by
-compiling a probe with the pinned compiler, not inferred.
+**Status: LPython 0.22.0 is rejected as a target; CPython 3.11+ is the target.** This file is the
+evidence behind that decision and nothing here is a deliverable. It records, per runtime module,
+which constructs LPython 0.22 rejects and what the replacement would have been. Every verdict below
+was produced by compiling a probe with the pinned compiler, not inferred.
 
 Compiler: `lpython 0.22.0` from conda-forge (linux-64), the newest GitHub release (v0.22.0,
 2024-07-08). Probe project: a scratch pixi workspace with `pixi add lpython`; probes are run with
@@ -105,6 +105,34 @@ Blocked, not fixable in this file: the array element type. See "the value model"
 | `raw[:size]`, `dest.data[:at]` slicing (32, 91) | `list` slicing works; `str` slicing is unreliable inside functions | loops for `str`, slicing for `list` |
 | `set!`/`get!` out-of-bounds behavior | LPython has no silent out-of-bounds writes on `list[i32]`; index errors abort | keep the bounds checks from the reference |
 | lambdas (112-129) | rejected | name table |
+
+## `scratch/lpython/fixed_lp.py`: fixed-width integers (evidence only)
+
+LPython has native `i8`..`i64` and `u8`..`u64`, so fixed-width arithmetic looked expressible: the
+prototype stores the unsigned bit pattern in an `i64`, as the C and JavaScript runtimes do, and
+applies the sign only when a value is observed. `gen_fixed_matrix.py` generates 2565 cases (8 types
+times 12 binary operations on every pair of 5 boundary operands, each type's unary operations, and
+45 width conversions); `fixed_ref.mjs` computes the expected results with `src/runtime/fixed.js`.
+
+Status: **54 of 2565 results still differ**, all in 64-bit unsigned division, modulus, comparison,
+and conversions involving `UInt64`. The cause is the compiler, not the arithmetic style:
+`u64` casts and `u64` division are wrong in 0.22. A probe computing `u64(2^63) // u64(2)` printed
+the negation of the correct quotient, and `i64(u64)` round trips lose the value. The prototype
+therefore hand-writes unsigned 64-bit division and comparison on bit patterns, which fixed the
+comparisons but not every conversion.
+
+Other LPython typing facts this exercise established:
+
+| Issue | Consequence |
+| --- | --- |
+| Every literal in an `i64` expression needs an `i64(...)` cast | `q += 1`, `return 0`, `x - 1`, and shift counts fail with `type mismatch ('i64' and 'i32')` otherwise |
+| Decimal literals above 2^53 are mis-parsed | `i64(9223372036854775807)` printed `4611709534437185604`; `(i64(1) << i64(63)) - i64(1)` is exact |
+| `//` floors, while Lean's `div` truncates | implement truncating division and remainder from `//` plus a sign correction |
+| `i64` arithmetic wraps | matches the reference; the 64-bit mask is `i64(-1)` |
+| The representation is shared between signed and unsigned types | `div`, `mod`, `decLt`, and `decLe` need an explicit `signed` flag |
+| `abs` and `log2` exist only on one signedness | generate them per type, as `fixed.js` does |
+
+LPython 0.22 is rejected as a target, so this prototype is evidence, not a deliverable.
 
 ## The value model (blocks `Array` and `ByteArray`)
 
